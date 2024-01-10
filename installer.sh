@@ -459,7 +459,7 @@ function do_update(){
 
 function usage() {
     cat <<EOF
-Использование: $(basename $0) [options] <команда>
+Использование: $(basename $0) [options] [<команда>]
 
 По-умолчанию выполняется установка приложений (install)
 
