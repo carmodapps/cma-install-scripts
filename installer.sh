@@ -163,13 +163,17 @@ function log_verbose() {
 }
 
 #################################################################
+# Util functions
 
-function _unique_str_list() {
+function fn_unique_str_list() {
   local str="$1"
   echo "${str}" | tr ' ' '\n' | sort -u | tr '\n' ' '
 }
 
-function _run_adb() {
+#################################################################
+# Run commands
+
+function run_adb() {
   log_verbose "adb $*"
 
   if ! "$ADB" "$@"; then
@@ -233,6 +237,20 @@ function get_screen_type() {
   fi
 }
 
+function get_vin() {
+  local cpu_type=$1
+
+  local vin
+  vin=$(run_adb shell getprop persist.sys.vehicle.vin)
+
+  if [ -z "${vin}" ]; then
+    log_error "VIN не найден"
+    exit 1
+  fi
+
+  echo "${vin}"
+}
+
 function get_custom_packages_dir() {
   local screen_type=$1
   local dir
@@ -257,8 +275,9 @@ function get_custom_packages_dir() {
 }
 
 #################################################################
+# Tweaks
 
-function set_timezone() {
+function tweak_set_timezone() {
   local timezone
   local origin
 
@@ -271,7 +290,7 @@ function set_timezone() {
     origin="по-умолчанию"
   fi
 
-  if ! _run_adb shell service call alarm 3 s16 "${timezone}" >/dev/null; then
+  if ! run_adb shell service call alarm 3 s16 "${timezone}" >/dev/null; then
     log_error "Установка часового пояса (${timezone}, ${origin}): ошибка"
     return 1
   else
@@ -279,10 +298,10 @@ function set_timezone() {
   fi
 }
 
-function set_night_mode() {
+function tweak_set_night_mode() {
   log_info "Установка ночного режима..."
 
-  if ! _run_adb shell cmd uimode night yes; then
+  if ! run_adb shell cmd uimode night yes; then
     log_error "Установка ночного режима: ошибка"
     return 1
   else
@@ -290,19 +309,17 @@ function set_night_mode() {
   fi
 }
 
-function get_vin() {
-  local cpu_type=$1
+function tweak_disable_psglauncher() {
+  local screen_type=$1
+  local user_id=$2
 
-  local vin
-  vin=$(_run_adb shell getprop persist.sys.vehicle.vin)
+  log_info "[${screen_type}] Отключение PSGLauncher"
 
-  if [ -z "${vin}" ]; then
-    log_error "VIN не найден"
-    exit 1
-  fi
-
-  echo "${vin}"
+  run_adb shell pm disable-user --user "${user_id}" com.lixiang.psglauncher
+  run_adb shell pm clear --user "${user_id}" com.lixiang.psglauncher
 }
+
+#################################################################
 
 # Return: app_id\tapp_version_code\tapp_version_name
 function get_installed_package_info() {
@@ -313,7 +330,7 @@ function get_installed_package_info() {
 
   local adb_output
   adb_output=$(
-    _run_adb shell dumpsys package |
+    run_adb shell dumpsys package |
       awk -v app_id="$app_id" -v user_id="$user_id" '
       $0 ~ "Package \\[" app_id "\\]" {
         package_found = 1
@@ -360,13 +377,13 @@ function get_installed_package_info() {
 #
 # Find app files in PACKAGES_CMA_DIR
 # Return: list of files separated by \0
-function _find_app_files() {
+function find_app_files() {
   local app_id=$1
 
   find "${PACKAGES_CMA_DIR}" -name "${app_id}*.apk" -print0
 }
 
-function _get_app_files_count() {
+function get_app_files_count() {
   local app_id=$1
   local count_cma
 
@@ -377,12 +394,12 @@ function _get_app_files_count() {
   echo "${count_cma}"
 }
 
-function _find_app_first_file() {
+function find_app_first_file() {
   local app_id=$1
 
   # Use _find_app_files and get the first file
   local app_file
-  app_file=$(_find_app_files "${app_id}" | head -n 1)
+  app_file=$(find_app_files "${app_id}" | head -n 1)
 
   echo "${app_file}"
 }
@@ -391,10 +408,10 @@ function post_install_app_swiftkey() {
   local screen_type=$1
   local user_id=$2
 
-  _run_adb shell ime disable --user "${user_id}" com.baidu.input/.ImeService &&
-    _run_adb shell ime disable --user $user_id com.android.inputmethod.latin/.LatinIME &&
-    _run_adb shell ime enable --user $user_id com.touchtype.swiftkey/com.touchtype.KeyboardService &&
-    _run_adb shell ime set --user $user_id com.touchtype.swiftkey/com.touchtype.KeyboardService
+  run_adb shell ime disable --user "${user_id}" com.baidu.input/.ImeService &&
+    run_adb shell ime disable --user $user_id com.android.inputmethod.latin/.LatinIME &&
+    run_adb shell ime enable --user $user_id com.touchtype.swiftkey/com.touchtype.KeyboardService &&
+    run_adb shell ime set --user $user_id com.touchtype.swiftkey/com.touchtype.KeyboardService
 
   if [ $? -ne 0 ]; then
     log_error "[${screen_type}] Настройка SwiftKey: ошибка"
@@ -461,7 +478,7 @@ function install_apk() {
         log_warn "[${screen_type}] [${app_id}] Установленная версия apk (${installed_version_name} (${installed_version_code})) больше локальной (${app_version_name} (${app_version_code})), принудительно устанавливаем"
 
         # !!! Мы должны удалить старый со ВСЕХ мониторов, а не только с текущего, не используем --user
-        if ! _run_adb uninstall "${app_id}"; then
+        if ! run_adb uninstall "${app_id}"; then
           #if ! _run_adb uninstall --user "${user_id}" "${app_id}"; then
           log_error "[${screen_type}] [${app_id}] Удаление старой версии apk: ошибка"
           return 1
@@ -477,7 +494,7 @@ function install_apk() {
 
   log_info "[${screen_type}] [$app_id] Установка..."
 
-  if ! _run_adb install -r -g --user "${user_id}" "${app_filename}"; then
+  if ! run_adb install -r -g --user "${user_id}" "${app_filename}"; then
     log_error "[${screen_type}] [$app_id] Установка: ошибка"
     return 1
   else
@@ -503,7 +520,7 @@ function install_apk() {
   for opt in "${appops[@]}"; do
     log_info "[${screen_type}] [$app_id] Выдача разрешения ${opt}..."
 
-    if ! _run_adb shell appops set --user "${user_id}" "${app_id}" "${opt}" allow; then
+    if ! run_adb shell appops set --user "${user_id}" "${app_id}" "${opt}" allow; then
       log_error "[${screen_type}] [$app_id] Выдача разрешения ${opt}: ошибка"
       return 1
     else
@@ -525,7 +542,7 @@ function install_carmodapps_app() {
   local user_id=$3
   local app_filename
 
-  app_filename=$(_find_app_first_file "${app_id}")
+  app_filename=$(find_app_first_file "${app_id}")
 
   if [ -z "${app_filename}" ]; then
     log_error "[${screen_type}] [$app_id] Нет файла для установки"
@@ -533,16 +550,6 @@ function install_carmodapps_app() {
   fi
 
   install_apk "${screen_type}" "${user_id}" "${app_filename}"
-}
-
-function _disable_psglauncher() {
-  local screen_type=$1
-  local user_id=$2
-
-  log_info "[${screen_type}] Отключение PSGLauncher"
-
-  _run_adb shell pm disable-user --user "${user_id}" com.lixiang.psglauncher
-  _run_adb shell pm clear --user "${user_id}" com.lixiang.psglauncher
 }
 
 function install_custom_packages() {
@@ -579,7 +586,7 @@ function install_front() {
       screen_type="${SCREEN_TYPE_COPILOT}"
       user_apps=("${APPS_SCREEN_TYPE_COPILOT[@]}")
 
-      _disable_psglauncher "${screen_type}" "${FRONT_MAIN_USER_ID}"
+      tweak_disable_psglauncher "${screen_type}" "${FRONT_MAIN_USER_ID}"
     fi
 
     # Install all apps
@@ -598,7 +605,7 @@ function install_rear() {
   local user_id="${REAR_USER_ID}"
   local apps=("${APPS_ALL_SCREENS[@]}" "${APPS_SCREEN_TYPE_REAR[@]}")
 
-  _disable_psglauncher "${SCREEN_TYPE_REAR}" "${user_id}"
+  tweak_disable_psglauncher "${SCREEN_TYPE_REAR}" "${user_id}"
 
   # Install all apps
   local app_id
@@ -610,7 +617,7 @@ function install_rear() {
   install_custom_packages "${SCREEN_TYPE_REAR}" "${user_id}"
 }
 
-function _check_all_apps_exists() {
+function check_all_apps_exists() {
   local all_apps
   local app_id
   local error_missing_apps=false
@@ -618,11 +625,11 @@ function _check_all_apps_exists() {
   local exit_code=0
 
   all_apps="${APPS_ALL_SCREENS[*]} ${APPS_SCREEN_TYPE_DRIVER[*]} ${APPS_SCREEN_TYPE_COPILOT[*]}${APPS_SCREEN_TYPE_REAR[*]}"
-  all_apps=$(_unique_str_list "${all_apps}")
+  all_apps=$(fn_unique_str_list "${all_apps}")
 
   for app_id in ${all_apps}; do
     local count
-    count=$(_get_app_files_count "${app_id}")
+    count=$(get_app_files_count "${app_id}")
 
     if [ "${count}" -eq 0 ]; then
       log_error "[${app_id}] Приложение не найдено в папках packages/carmodapps или packages/user"
@@ -635,7 +642,7 @@ function _check_all_apps_exists() {
       local app_file
       while IFS= read -r -d '' app_file; do
         log_error "[${app_id}]     ${app_file}"
-      done < <(eval "_find_app_files ${app_id}")
+      done < <(find_app_files "$app_id")
 
       error_duplicate_apps=true
       exit_code=1
@@ -668,12 +675,12 @@ function wait_for_device() {
   log_info "Ожидание подключения устройства..."
   log_warn "!!! Подтвердите подключение на мониторе автомобиля !!!!"
 
-  if ! _run_adb wait-for-device; then
+  if ! run_adb wait-for-device; then
     log_error "Устройство не найдено"
     exit 1
   fi
 
-  product_type=$(_run_adb shell getprop ro.build.product)
+  product_type=$(run_adb shell getprop ro.build.product)
   cpu_type=$(get_cpu_type "${product_type}")
   vin=$(get_vin "${cpu_type}")
 
@@ -697,7 +704,7 @@ function do_display_vin() {
 function do_install() {
   local cpu_type
 
-  if ! _check_all_apps_exists; then
+  if ! check_all_apps_exists; then
     exit 1
   fi
 
@@ -705,13 +712,13 @@ function do_install() {
 
   case "${cpu_type}" in
   "${CPU_TYPE_FRONT}")
-    set_timezone
-    set_night_mode
+    tweak_set_timezone
+    tweak_set_night_mode
     install_front
     ;;
   "${CPU_TYPE_REAR}")
-    set_timezone
-    set_night_mode
+    tweak_set_timezone
+    tweak_set_night_mode
     install_rear
     ;;
     # Default will be handled in wait_for_device()
@@ -724,7 +731,7 @@ function delete_for_user() {
   local user_id=$2
   local non_system_apps
 
-  non_system_apps=$(_run_adb shell pm list packages --user "${user_id}" -3 | cut -d':' -f2 | tr -d '\r' | tr '\n' ' ')
+  non_system_apps=$(run_adb shell pm list packages --user "${user_id}" -3 | cut -d':' -f2 | tr -d '\r' | tr '\n' ' ')
 
   if [ -z "$non_system_apps" ]; then
     log_info "[${screen_type}] Нет приложений для удаления"
@@ -736,7 +743,7 @@ function delete_for_user() {
   for app_id in ${non_system_apps}; do
     log_info "[${screen_type}] Удаление ${app_id}..."
 
-    if ! _run_adb uninstall --user "${user_id}" "${app_id}"; then
+    if ! run_adb uninstall --user "${user_id}" "${app_id}"; then
       log_error "[${screen_type}] Удаление ${app_id}: ошибка"
       return 1
     else
@@ -791,9 +798,9 @@ function do_update() {
     fi
 
     # app_line format: "app_id|app_filename|app_url"
-    app_id=$(echo "${app_line}" | cut -d'|' -f1)
-    app_filename=$(echo "${app_line}" | cut -d'|' -f2)
-    app_url=$(echo "${app_line}" | cut -d'|' -f3)
+    app_id=$(echo "$app_line" | cut -d'|' -f1)
+    app_filename=$(echo "$app_line" | cut -d'|' -f2)
+    app_url=$(echo "$app_line" | cut -d'|' -f3)
 
     app_local_filename="${PACKAGES_CMA_DIR}/${app_filename}"
     if [ -f "${app_local_filename}" ]; then
@@ -818,7 +825,7 @@ function do_update() {
       fi
       log_warn "[${app_id}] Удаление старого файла ${old_app_file}..."
       rm -f "${old_app_file}"
-    done < <(eval "_find_app_files ${app_id}")
+    done < <(find_app_files "$app_id")
   done
 
   log_info "Проверка обновлений приложений: успешно"
