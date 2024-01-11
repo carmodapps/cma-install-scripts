@@ -66,7 +66,7 @@ FRONT_MAIN_USER_ID=0
 FRONT_COPILOT_USER_ID=21473
 REAR_USER_ID=0
 
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 SCRIPT_BASENAME="$(basename "${BASH_SOURCE[0]}")"
 DOWNLOAD_DIR="${SCRIPT_DIR}/downloads"
 
@@ -90,20 +90,20 @@ HOST_TIMEZONE=""
 
 # Determine the platform and set the binary path
 case "$(uname -s)" in
-    Darwin)
-        # Mac OS X platform
-        PLATFORM_BINARY_PATH="mac/$(uname -m)"
-        HOST_TIMEZONE=$(readlink /etc/localtime | sed 's#.*/zoneinfo/##')
-        ;;
-    Linux)
-        # Linux platform
-        PLATFORM_BINARY_PATH="linux/$(uname -m)"
-        HOST_TIMEZONE=$(cat /etc/timezone)
-        ;;
-    *)
-        echo "Неизвестная платформа: $(uname -s)"
-        exit 1
-        ;;
+Darwin)
+  # Mac OS X platform
+  PLATFORM_BINARY_PATH="mac/$(uname -m)"
+  HOST_TIMEZONE=$(readlink /etc/localtime | sed 's#.*/zoneinfo/##')
+  ;;
+Linux)
+  # Linux platform
+  PLATFORM_BINARY_PATH="linux/$(uname -m)"
+  HOST_TIMEZONE=$(cat /etc/timezone)
+  ;;
+*)
+  echo "Неизвестная платформа: $(uname -s)"
+  exit 1
+  ;;
 esac
 
 ADB="${SCRIPT_DIR}/3rd_party/bin/${PLATFORM_BINARY_PATH}/adb"
@@ -146,12 +146,12 @@ function log_verbose() {
 
 #################################################################
 
-function _unique_str_list(){
+function _unique_str_list() {
   local str="$1"
   echo "${str}" | tr ' ' '\n' | sort -u | tr '\n' ' '
 }
 
-function _run_adb(){
+function _run_adb() {
   log_verbose "adb \"$*\""
 
   if ! "$ADB" "$@"; then
@@ -163,24 +163,24 @@ function _run_adb(){
 #################################################################
 # CPU/Screen types helpers
 
-function get_cpu_type(){
+function get_cpu_type() {
   local product_type=$1
 
   case "${product_type}" in
-    HU_SS2MAXF)
-      echo "${CPU_TYPE_FRONT}"
-      ;;
-    HU_SS2MAXR)
-      echo "${CPU_TYPE_REAR}"
-      ;;
-    *)
-      log_error "Неизвестный тип CPU: ${product_type}"
-      exit 1
-      ;;
+  HU_SS2MAXF)
+    echo "${CPU_TYPE_FRONT}"
+    ;;
+  HU_SS2MAXR)
+    echo "${CPU_TYPE_REAR}"
+    ;;
+  *)
+    log_error "Неизвестный тип CPU: ${product_type}"
+    exit 1
+    ;;
   esac
 }
 
-function get_screen_type(){
+function get_screen_type() {
   local cpu_type=$1
   local user_id=$2
 
@@ -208,7 +208,7 @@ function get_screen_type(){
 
 #################################################################
 
-function set_timezone(){
+function set_timezone() {
   local timezone
   local origin
 
@@ -221,7 +221,7 @@ function set_timezone(){
     origin="по-умолчанию"
   fi
 
-  if ! _run_adb shell service call alarm 3 s16 "${timezone}" > /dev/null; then
+  if ! _run_adb shell service call alarm 3 s16 "${timezone}" >/dev/null; then
     log_error "Установка часового пояса (${timezone}, ${origin}): ошибка"
     return 1
   else
@@ -229,7 +229,7 @@ function set_timezone(){
   fi
 }
 
-function set_night_mode(){
+function set_night_mode() {
   log_info "Установка ночного режима..."
 
   if ! _run_adb shell cmd uimode night yes; then
@@ -240,7 +240,7 @@ function set_night_mode(){
   fi
 }
 
-function get_vin(){
+function get_vin() {
   local cpu_type=$1
 
   local vin
@@ -257,26 +257,26 @@ function get_vin(){
 #
 # Find app files in DOWNLOAD_DIR
 # Return: list of files separated by \0
-function _find_app_files(){
+function _find_app_files() {
   local app_id=$1
 
   find "${DOWNLOAD_DIR}" -name "${app_id}*.apk" -print0
 }
 
-function _get_app_files_count(){
+function _get_app_files_count() {
   local app_id=$1
 
   find "${DOWNLOAD_DIR}" -name "${app_id}*.apk" | wc -l
 }
 
-function post_install_app_swiftkey(){
+function post_install_app_swiftkey() {
   local screen_type=$1
   local user_id=$2
 
-  _run_adb shell ime disable --user "${user_id}" com.baidu.input/.ImeService && \
-  _run_adb shell ime disable --user $user_id com.android.inputmethod.latin/.LatinIME && \
-  _run_adb shell ime enable --user $user_id com.touchtype.swiftkey/com.touchtype.KeyboardService && \
-  _run_adb shell ime set --user $user_id com.touchtype.swiftkey/com.touchtype.KeyboardService
+  _run_adb shell ime disable --user "${user_id}" com.baidu.input/.ImeService &&
+    _run_adb shell ime disable --user $user_id com.android.inputmethod.latin/.LatinIME &&
+    _run_adb shell ime enable --user $user_id com.touchtype.swiftkey/com.touchtype.KeyboardService &&
+    _run_adb shell ime set --user $user_id com.touchtype.swiftkey/com.touchtype.KeyboardService
 
   if [ $? -ne 0 ]; then
     log_error "[${screen_type}] Настройка SwiftKey: ошибка"
@@ -286,7 +286,7 @@ function post_install_app_swiftkey(){
   fi
 }
 
-function _install_app(){
+function _install_app() {
   local screen_type=$1
   local app_id=$2
   local user_id=$3
@@ -330,7 +330,6 @@ function _install_app(){
 
   done
 
-
   for opt in "${appops[@]}"; do
     log_info "[${screen_type}] [$app_id] Выдача разрешения ${opt}..."
 
@@ -349,7 +348,7 @@ function _install_app(){
   fi
 }
 
-function _disable_psglauncher(){
+function _disable_psglauncher() {
   local screen_type=$1
   local user_id=$2
 
@@ -358,7 +357,6 @@ function _disable_psglauncher(){
   _run_adb shell pm disable-user --user "${user_id}" com.lixiang.psglauncher
   _run_adb shell pm clear --user "${user_id}" com.lixiang.psglauncher
 }
-
 
 function install_front() {
   local users=("${FRONT_MAIN_USER_ID}" "${FRONT_COPILOT_USER_ID}")
@@ -399,7 +397,7 @@ function install_rear() {
   done
 }
 
-function _check_all_apps_exists(){
+function _check_all_apps_exists() {
   local all_apps
   local app_id
   local error_missing_apps=false
@@ -426,7 +424,6 @@ function _check_all_apps_exists(){
         log_error "[${app_id}]     ${app_file}"
       done < <(eval "_find_app_files ${app_id}")
 
-
       error_duplicate_apps=true
       exit_code=1
     fi
@@ -450,7 +447,7 @@ function _check_all_apps_exists(){
   return ${exit_code}
 }
 
-function wait_for_device(){
+function wait_for_device() {
   local product_type
   local cpu_type
   local vin
@@ -471,7 +468,7 @@ function wait_for_device(){
   echo "${cpu_type}"
 }
 
-function do_display_vin(){
+function do_display_vin() {
   local cpu_type
   local vin
 
@@ -483,7 +480,7 @@ function do_display_vin(){
   log_info "############################################################"
 }
 
-function do_install(){
+function do_install() {
   local cpu_type
 
   if ! _check_all_apps_exists; then
@@ -493,22 +490,22 @@ function do_install(){
   cpu_type=$(wait_for_device)
 
   case "${cpu_type}" in
-    "${CPU_TYPE_FRONT}")
-      set_timezone
-      set_night_mode
-      install_front
-      ;;
-    "${CPU_TYPE_REAR}")
-      set_timezone
-      set_night_mode
-      install_rear
-      ;;
+  "${CPU_TYPE_FRONT}")
+    set_timezone
+    set_night_mode
+    install_front
+    ;;
+  "${CPU_TYPE_REAR}")
+    set_timezone
+    set_night_mode
+    install_rear
+    ;;
     # Default will be handled in wait_for_device()
   esac
 
 }
 
-function delete_for_user(){
+function delete_for_user() {
   local screen_type=$1
   local user_id=$2
   local non_system_apps
@@ -534,24 +531,24 @@ function delete_for_user(){
   done
 }
 
-function do_delete(){
+function do_delete() {
   local cpu_type
 
   cpu_type=$(wait_for_device)
 
   case "${cpu_type}" in
-    "${CPU_TYPE_FRONT}")
-      delete_for_user "${SCREEN_TYPE_DRIVER}" "${FRONT_MAIN_USER_ID}"
-      delete_for_user "${SCREEN_TYPE_COPILOT}" "${FRONT_COPILOT_USER_ID}"
-      ;;
-    "${CPU_TYPE_REAR}")
-      delete_for_user "${SCREEN_TYPE_REAR}" "${REAR_USER_ID}"
-      ;;
+  "${CPU_TYPE_FRONT}")
+    delete_for_user "${SCREEN_TYPE_DRIVER}" "${FRONT_MAIN_USER_ID}"
+    delete_for_user "${SCREEN_TYPE_COPILOT}" "${FRONT_COPILOT_USER_ID}"
+    ;;
+  "${CPU_TYPE_REAR}")
+    delete_for_user "${SCREEN_TYPE_REAR}" "${REAR_USER_ID}"
+    ;;
     # Default will be handled in wait_for_device()
   esac
 }
 
-function do_update(){
+function do_update() {
   local api_url="https://store.carmodapps.com/api/applications/download"
   local apps_url_list
 
@@ -610,7 +607,7 @@ function do_update(){
 #################################################################
 
 function usage() {
-    cat <<EOF
+  cat <<EOF
 Использование: $(basename $0) [options] [<команда>]
 
 По-умолчанию выполняется update + install
@@ -634,21 +631,21 @@ function main() {
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      -h|--help)
-        usage
-        exit 0
-        ;;
-      -v|--verbose)
-        VERBOSE=true
-        ;;
-      vin|install|update|delete)
-        cmd="$1"
-        ;;
-      *)
-        log_error "Неизвестная опция: $1"
-        usage
-        exit 1
-        ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    -v | --verbose)
+      VERBOSE=true
+      ;;
+    vin | install | update | delete)
+      cmd="$1"
+      ;;
+    *)
+      log_error "Неизвестная опция: $1"
+      usage
+      exit 1
+      ;;
     esac
     shift
   done
