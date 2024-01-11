@@ -70,16 +70,19 @@ VERBOSE=false
 # Setup 3rd party deps depending on OS
 
 PLATFORM_BINARY_PATH=""
+HOST_TIMEZONE=""
 
 # Determine the platform and set the binary path
 case "$(uname -s)" in
     Darwin)
         # Mac OS X platform
         PLATFORM_BINARY_PATH="mac/$(uname -m)"
+        HOST_TIMEZONE=$(readlink /etc/localtime | sed 's#.*/zoneinfo/##')
         ;;
     Linux)
         # Linux platform
         PLATFORM_BINARY_PATH="linux/$(uname -m)"
+        HOST_TIMEZONE=$(cat /etc/timezone)
         ;;
     *)
         echo "Неизвестная платформа: $(uname -s)"
@@ -132,12 +135,10 @@ function set_timezone(){
   local timezone
   local origin
 
-  # try /etc/timezone
-  if [ -f "/etc/timezone" ]; then
-    # Linux
-    timezone=$(cat /etc/timezone)
+  # if HOST_TIMEZONE is set, use it
+  if [ -n "${HOST_TIMEZONE}" ]; then
+    timezone="${HOST_TIMEZONE}"
     origin="из компьютера"
-  #elif # Add for MAC
   else
     timezone="${DEFAULT_TIMEZONE}"
     origin="по-умолчанию"
