@@ -43,19 +43,9 @@ APPS_SCREEN_TYPE_REAR=(
 
 #################################################################
 # Разрешения appops для приложений
-#
-# Для добавления нового разрешения необходимо:
-#   1. Добавить его в APPOPS_TYPES
-#   2. Добавить в массив APPOPS_xxx нужные приложения
-
-# Все возможные типы разрешений
-APPOPS_TYPES=(
+# Они будут выданы автоматически если в манифесте приложения есть соответствующие разрешения
+PERMISSIONS_APPOPS=(
   "REQUEST_INSTALL_PACKAGES"
-)
-
-# shellcheck disable=SC2034
-APPOPS_REQUEST_INSTALL_PACKAGES=(
-  "com.carmodapps.carstore"
 )
 
 #################################################################
@@ -503,17 +493,10 @@ function install_apk() {
   # Check APPOPS_xxx
   local appops=() # Required appops for this app
   local opt
-  for opt in "${APPOPS_TYPES[@]}"; do
-    local var_name="APPOPS_${opt}"
-    local appops_list=("${!var_name}")
-    local appops_app_id
-
-    for appops_app_id in "${appops_list[@]}"; do
-      if [ "${appops_app_id}" == "${app_id}" ]; then
-        appops+=("${opt}")
-      fi
-    done
-
+  for opt in "${PERMISSIONS_APPOPS[@]}"; do
+    if run_apkanalyzer manifest permissions "${app_filename}" | grep -q "${opt}"; then
+      appops+=("${opt}")
+    fi
   done
 
   for opt in "${appops[@]}"; do
