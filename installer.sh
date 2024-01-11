@@ -68,7 +68,10 @@ REAR_USER_ID=0
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 SCRIPT_BASENAME="$(basename "${BASH_SOURCE[0]}")"
-DOWNLOAD_DIR="${SCRIPT_DIR}/downloads"
+
+PACKAGES_DIR="${SCRIPT_DIR}/packages"
+PACKAGES_CMA_DIR="${PACKAGES_DIR}/carmodapps"
+PACKAGES_USER_DIR="${PACKAGES_DIR}/user"
 
 VERBOSE=false
 
@@ -255,18 +258,39 @@ function get_vin() {
 }
 
 #
-# Find app files in DOWNLOAD_DIR
+# Find app files in PACKAGES_CMA_DIR and PACKAGES_USER_DIR
 # Return: list of files separated by \0
 function _find_app_files() {
   local app_id=$1
 
-  find "${DOWNLOAD_DIR}" -name "${app_id}*.apk" -print0
+  find "${PACKAGES_CMA_DIR}" -name "${app_id}*.apk" -print0
+  find "${PACKAGES_USER_DIR}" -name "${app_id}*.apk" -print0
 }
 
 function _get_app_files_count() {
   local app_id=$1
+  local count_cma
+  local count_user
+  local total_count
 
-  find "${DOWNLOAD_DIR}" -name "${app_id}*.apk" | wc -l
+  count_cma=$(find "${PACKAGES_CMA_DIR}" -name "${app_id}*.apk" | wc -l | xargs)
+  count_user=$(find "${PACKAGES_USER_DIR}" -name "${app_id}*.apk" | wc -l | xargs)
+
+  log_verbose "[${app_id}] Количество файлов приложения: carmodapps=${count_cma}, user=${count_user}"
+
+  total_count=$((count_cma + count_user))
+
+  echo ${total_count}
+}
+
+function _find_app_first_file() {
+  local app_id=$1
+
+  # Use _find_app_files and get the first file
+  local app_file
+  app_file=$(_find_app_files "${app_id}" | head -n 1)
+
+  echo "${app_file}"
 }
 
 function post_install_app_swiftkey() {
@@ -292,11 +316,10 @@ function _install_app() {
   local user_id=$3
   local app_filename
 
-  # FIXME: use _find_app_files and check that only one exists
-  app_filename=$(find "${DOWNLOAD_DIR}" -name "${app_id}*.apk" | head -n 1)
+  app_filename=$(_find_app_first_file "${app_id}")
 
   if [ -z "${app_filename}" ]; then
-    log_error "[${screen_type}] [$app_id] Файл не найден в каталоге загрузок: ${DOWNLOAD_DIR}"
+    log_error "[${screen_type}] [$app_id] Нет файла для установки"
     return 1
   fi
 
@@ -412,7 +435,7 @@ function _check_all_apps_exists() {
     count=$(_get_app_files_count "${app_id}")
 
     if [ "${count}" -eq 0 ]; then
-      log_error "[${app_id}] Приложение не найдено в каталоге загрузок"
+      log_error "[${app_id}] Приложение не найдено в папках packages/carmodapps или packages/user"
       error_missing_apps=true
       exit_code=1
 
@@ -437,11 +460,11 @@ function _check_all_apps_exists() {
 
   if ${error_missing_apps}; then
     log_error "Для автоматического скачивания приложений CarModApps необходимо выполнить команду \"${SCRIPT_BASENAME} update\""
-    log_error "Для ручного добавления сторонних приложений необходимо поместить их в каталог загрузок: ${DOWNLOAD_DIR}"
+    log_error "Для ручного добавления сторонних приложений смотрите инструкцию:  $(basename $0) -h"
   fi
 
   if ${error_duplicate_apps}; then
-    log_error "Удалите дубликаты приложений из каталога загрузок: ${DOWNLOAD_DIR}"
+    log_error "Удалите дубликаты приложений и повторите попытку"
   fi
 
   return ${exit_code}
@@ -552,7 +575,7 @@ function do_update() {
   local api_url="https://store.carmodapps.com/api/applications/download"
   local apps_url_list
 
-  mkdir -p "${DOWNLOAD_DIR}"
+  mkdir -p "${PACKAGES_CMA_DIR}"
 
   log_info "Проверка обновлений приложений..."
 
@@ -574,7 +597,7 @@ function do_update() {
     app_filename=$(echo "${app_line}" | cut -d'|' -f2)
     app_url=$(echo "${app_line}" | cut -d'|' -f3)
 
-    app_local_filename="${DOWNLOAD_DIR}/${app_filename}"
+    app_local_filename="${PACKAGES_CMA_DIR}/${app_filename}"
     if [ -f "${app_local_filename}" ]; then
       log_verbose "[${app_id}] Уже загружен, пропускаем..."
     else
@@ -621,6 +644,26 @@ function usage() {
 Опции:
   -h, --help: Показать это сообщение
   -v, --verbose: Выводить подробную информацию
+
+Хранилище приложений:
+  Приложения CarModApps хранятся в каталоге packages/carmodapps
+  Пользовательские приложения хранятся в каталоге packages/user
+
+Добавление пользовательских приложений:
+
+  1. Положите apk файлы приложений в каталог packages/user
+     ВАЖНО: Имя файла должно начинаться с идентификатора приложения
+     Пример: com.example.myapp-1.0.0.apk
+
+  2. Создайте файл user_settings.sh и добавьте в соответствующие массивы ваше приложение:
+
+     APPS_ALL_SCREENS: список приложений для всех экранов
+     APPS_SCREEN_TYPE_DRIVER: список приложений для экрана водителя
+     APPS_SCREEN_TYPE_COPILOT: список приложений для экрана пассажира
+     APPS_SCREEN_TYPE_REAR: список приложений для заднего экрана
+
+     Пример:
+        APPS_ALL_SCREENS+=("com.example.myapp")
 EOF
 }
 
