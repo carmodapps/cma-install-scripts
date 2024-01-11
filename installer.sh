@@ -62,6 +62,7 @@ APPOPS_REQUEST_INSTALL_PACKAGES=(
 # System vars
 
 ADB="adb"
+APKANALYZER="apkanalyzer"
 FRONT_MAIN_USER_ID=0
 FRONT_COPILOT_USER_ID=21473
 REAR_USER_ID=0
@@ -74,6 +75,8 @@ PACKAGES_CMA_DIR="${PACKAGES_DIR}/carmodapps"
 PACKAGES_USER_DIR="${PACKAGES_DIR}/user"
 
 VERBOSE=false
+
+FORCE_INSTALL=false
 
 #################################################################
 # CPU/Screen types
@@ -110,6 +113,8 @@ Linux)
 esac
 
 ADB="${SCRIPT_DIR}/3rd_party/bin/${PLATFORM_BINARY_PATH}/adb"
+
+# FIXME: Добавить APKANALYZER
 
 if [ ! -f "${ADB}" ]; then
   echo "ADB не найден: ${ADB}"
@@ -257,6 +262,39 @@ function get_vin() {
   echo "${vin}"
 }
 
+# Return: app_id\tapp_version_code\tapp_version_name
+function get_installed_package_info() {
+  local app_id=$1
+  local user_id=$2
+
+  local adb_output
+  adb_output=$(
+    _run_adb shell dumpsys package --user "${user_id}" "${app_id}" |
+      awk '/^[ ]*Package \[.*\] (.*)/ { i = index($0, "[") + 1; pkg = substr($0, i, index($0, "]") - i); printf "\n%s", pkg; } /[ ]*versionName=/ { { printf "\t%s", $0; } }  /[ ]*versionCode=/ { { printf  "\t%s", $0; } } ' |
+      grep "${app_id}"
+  )
+
+  #  log_verbose "[${app_id}] adb_output: ${adb_output}"
+
+  # No output
+  if [ -z "${adb_output}" ]; then
+    log_verbose "[${app_id}] Приложение не найдено"
+    return 1
+  fi
+
+  local app_version_code
+  local app_version_name
+
+  # Output format:
+  # com.carmodapps.carstore      versionCode=21 minSdk=28 targetSdk=28           versionName=1.2
+  app_version_code=$(echo "$adb_output" | sed -n 's/.*versionCode=\([^ ]*\).*/\1/p' | xargs)
+  app_version_name=$(echo "$adb_output" | sed -n 's/.*versionName=\(.*\)$/\1/p' | xargs)
+
+  log_verbose "[${app_id}] Установленная версия приложения: ${app_version_name} (${app_version_code})"
+
+  printf "%s\t%s\t%s" "${app_id}" "${app_version_code}" "${app_version_name}"
+}
+
 #
 # Find app files in PACKAGES_CMA_DIR and PACKAGES_USER_DIR
 # Return: list of files separated by \0
@@ -310,22 +348,75 @@ function post_install_app_swiftkey() {
   fi
 }
 
-function _install_app() {
+function install_apk() {
   local screen_type=$1
-  local app_id=$2
-  local user_id=$3
-  local app_filename
+  local user_id=$2
+  local app_filename=$3
 
-  app_filename=$(_find_app_first_file "${app_id}")
-
-  if [ -z "${app_filename}" ]; then
-    log_error "[${screen_type}] [$app_id] Нет файла для установки"
+  if [ ! -f "${app_filename}" ]; then
+    log_error "[${screen_type}] Файл не найден: ${app_filename}"
     return 1
   fi
 
-  if [ ! -f "${app_filename}" ]; then
-    log_error "[${screen_type}] [$app_id] Файл не найден: ${app_filename}"
-    return 1
+  #
+  # Get local app info
+  #
+  local apkanalyzer_str
+  apkanalyzer_str=$(${APKANALYZER} apk summary "${app_filename}")
+
+  local app_id
+  local app_version_code
+  local app_version_name
+  app_id=$(echo "${apkanalyzer_str}" | head -n 1 | cut -f1)
+  app_version_code=$(echo "${apkanalyzer_str}" | head -n 1 | cut -f2)
+  app_version_name=$(echo "${apkanalyzer_str}" | head -n 1 | cut -f3)
+
+  log_verbose "[${screen_type}] [${app_id}] Локальная версия apk: ${app_version_name} (${app_version_code})"
+
+  #
+  # Get device app info
+  #
+  local package_info_output
+  package_info_output=$(get_installed_package_info "${app_id}" "${user_id}")
+
+  # if package_info_output not empty
+  if [ -n "${package_info_output}" ]; then
+    local installed_version_code
+    local installed_version_name
+    installed_version_code=$(echo "${package_info_output}" | head -n 1 | cut -f2)
+    installed_version_name=$(echo "${package_info_output}" | head -n 1 | cut -f3)
+
+    log_verbose "[${screen_type}] [${app_id}] Установленная версия apk: ${installed_version_name} (${installed_version_code})"
+
+    # if version code and version name are the same
+    if [ "${app_version_code}" -eq "${installed_version_code}" ] && [ "${app_version_name}" == "${installed_version_name}" ]; then
+      if ${FORCE_INSTALL}; then
+        log_info "[${screen_type}] [${app_id}] Установленная версия apk совпадает с локальной, но установка принудительно включена, устанавливаем: ${app_version_name} (${app_version_code})"
+      else
+        log_info "[${screen_type}] [${app_id}] Установленная версия apk совпадает с локальной, пропускаем установку: ${app_version_name} (${app_version_code})"
+        return 0
+      fi
+      return 0
+    fi
+
+    # if installed version code is greater than local version code
+    if [ "${installed_version_code}" -gt "${app_version_code}" ]; then
+      if ${FORCE_INSTALL}; then
+        log_warn "[${screen_type}] [${app_id}] Установленная версия apk (${installed_version_name} (${installed_version_code})) больше локальной (${app_version_name} (${app_version_code})), принудительно устанавливаем"
+
+        # !!! Мы должны удалить старый со ВСЕХ мониторов, а не только с текущего, не используем --user
+        if ! _run_adb uninstall "${app_id}"; then
+          #if ! _run_adb uninstall --user "${user_id}" "${app_id}"; then
+          log_error "[${screen_type}] [${app_id}] Удаление старой версии apk: ошибка"
+          return 1
+        else
+          log_info "[${screen_type}] [${app_id}] Удаление старой версии apk: успешно"
+        fi
+      else
+        log_error "[${screen_type}] [${app_id}] Установленная версия apk (${installed_version_name} (${installed_version_code})) больше локальной (${app_version_name} (${app_version_code})), пропускаем установку"
+        return 1
+      fi
+    fi
   fi
 
   log_info "[${screen_type}] [$app_id] Установка..."
@@ -369,6 +460,23 @@ function _install_app() {
       return 1
     fi
   fi
+
+}
+
+function install_carmodapps_app() {
+  local screen_type=$1
+  local app_id=$2
+  local user_id=$3
+  local app_filename
+
+  app_filename=$(_find_app_first_file "${app_id}")
+
+  if [ -z "${app_filename}" ]; then
+    log_error "[${screen_type}] [$app_id] Нет файла для установки"
+    return 1
+  fi
+
+  install_apk "${screen_type}" "${user_id}" "${app_filename}"
 }
 
 function _disable_psglauncher() {
@@ -402,7 +510,7 @@ function install_front() {
     local apps=("${APPS_ALL_SCREENS[@]}" "${user_apps[@]}")
     local app_id
     for app_id in "${apps[@]}"; do
-      _install_app "${screen_type}" "${app_id}" "${user_id}"
+      install_carmodapps_app "${screen_type}" "${app_id}" "${user_id}"
     done
   done
 }
@@ -416,7 +524,7 @@ function install_rear() {
   # Install all apps
   local app_id
   for app_id in "${apps[@]}"; do
-    _install_app "${SCREEN_TYPE_REAR}" "${app_id}" "${user_id}"
+    install_carmodapps_app "${SCREEN_TYPE_REAR}" "${app_id}" "${user_id}"
   done
 }
 
@@ -645,6 +753,7 @@ function usage() {
 Опции:
   -h, --help: Показать это сообщение
   -v, --verbose: Выводить подробную информацию
+  -f, --force: Принудительно установить приложения, даже если они уже установлены
 
 Хранилище приложений:
   Приложения CarModApps хранятся в каталоге packages/carmodapps
@@ -681,6 +790,9 @@ function main() {
       ;;
     -v | --verbose)
       VERBOSE=true
+      ;;
+    -f | --force)
+      FORCE_INSTALL=true
       ;;
     vin | install | update | delete)
       cmd="$1"
