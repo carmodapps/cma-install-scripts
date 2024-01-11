@@ -476,6 +476,7 @@ function wait_for_device() {
   local vin
 
   log_info "Ожидание подключения устройства..."
+  log_warn "!!! Подтвердите подключение на мониторе автомобиля !!!!"
 
   if ! _run_adb wait-for-device; then
     log_error "Устройство не найдено"
