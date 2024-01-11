@@ -346,7 +346,7 @@ function _disable_psglauncher(){
 }
 
 
-function install_max_front() {
+function install_front() {
   local users=("${FRONT_MAIN_USER_ID}" "${FRONT_COPILOT_USER_ID}")
 
   local user_id
@@ -372,7 +372,7 @@ function install_max_front() {
   done
 }
 
-function install_max_rear() {
+function install_rear() {
   local screen_name="Экран задних пассажиров"
   local user_id="${REAR_USER_ID}"
   local apps=("${ALL_SCREEN_APPS[@]}" "${REAR_SCREEN_APPS[@]}")
@@ -494,12 +494,12 @@ function do_install(){
     "${CPU_TYPE_FRONT}")
       set_timezone
       set_night_mode
-      install_max_front
+      install_front
       ;;
     "${CPU_TYPE_REAR}")
       set_timezone
       set_night_mode
-      install_max_rear
+      install_rear
       ;;
     # Default will be handled in wait_for_device()
   esac
