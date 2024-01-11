@@ -1,4 +1,8 @@
-packages/
+packages/*
+!packages/**/*.gitkeep
+
+
+
 .idea/
 
 .DS_Store

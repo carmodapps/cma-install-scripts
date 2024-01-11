@@ -80,7 +80,9 @@ fi
 
 PACKAGES_DIR="${SCRIPT_DIR}/packages"
 PACKAGES_CMA_DIR="${PACKAGES_DIR}/carmodapps"
-PACKAGES_USER_DIR="${PACKAGES_DIR}/user"
+PACKAGES_CUSTOM_SCREEN_TYPE_DRIVER_DIR="${PACKAGES_DIR}/custom/driver"
+PACKAGES_CUSTOM_SCREEN_TYPE_COPILOT_DIR="${PACKAGES_DIR}/custom/copilot"
+PACKAGES_CUSTOM_SCREEN_TYPE_REAR_DIR="${PACKAGES_DIR}/custom/rear"
 
 VERBOSE=false
 
@@ -222,6 +224,29 @@ function get_screen_type() {
   fi
 }
 
+function get_custom_packages_dir() {
+  local screen_type=$1
+  local dir
+
+  case "${screen_type}" in
+  "${SCREEN_TYPE_DRIVER}")
+    dir="${PACKAGES_CUSTOM_SCREEN_TYPE_DRIVER_DIR}"
+    ;;
+  "${SCREEN_TYPE_COPILOT}")
+    dir="${PACKAGES_CUSTOM_SCREEN_TYPE_COPILOT_DIR}"
+    ;;
+  "${SCREEN_TYPE_REAR}")
+    dir="${PACKAGES_CUSTOM_SCREEN_TYPE_REAR_DIR}"
+    ;;
+  *)
+    log_error "Неизвестный тип экрана: ${screen_type}"
+    exit 1
+    ;;
+  esac
+
+  echo "${dir}"
+}
+
 #################################################################
 
 function set_timezone() {
@@ -304,29 +329,23 @@ function get_installed_package_info() {
 }
 
 #
-# Find app files in PACKAGES_CMA_DIR and PACKAGES_USER_DIR
+# Find app files in PACKAGES_CMA_DIR
 # Return: list of files separated by \0
 function _find_app_files() {
   local app_id=$1
 
   find "${PACKAGES_CMA_DIR}" -name "${app_id}*.apk" -print0
-  find "${PACKAGES_USER_DIR}" -name "${app_id}*.apk" -print0
 }
 
 function _get_app_files_count() {
   local app_id=$1
   local count_cma
-  local count_user
-  local total_count
 
   count_cma=$(find "${PACKAGES_CMA_DIR}" -name "${app_id}*.apk" | wc -l | xargs)
-  count_user=$(find "${PACKAGES_USER_DIR}" -name "${app_id}*.apk" | wc -l | xargs)
 
-  log_verbose "[${app_id}] Количество файлов приложения: carmodapps=${count_cma}, user=${count_user}"
+  log_verbose "[${app_id}] Количество файлов приложения: ${count_cma}"
 
-  total_count=$((count_cma + count_user))
-
-  echo ${total_count}
+  echo "${count_cma}"
 }
 
 function _find_app_first_file() {
@@ -497,6 +516,25 @@ function _disable_psglauncher() {
   _run_adb shell pm clear --user "${user_id}" com.lixiang.psglauncher
 }
 
+function install_custom_packages() {
+  local screen_type=$1
+  local user_id=$2
+  local user_packages_dir
+  local app_filename
+
+  user_packages_dir=$(get_custom_packages_dir "${screen_type}")
+
+  log_verbose "[${screen_type}] Проверка папки пользовательских приложений: ${user_packages_dir}"
+
+  # Read all apk files in user_packages_dir
+  for app_filename in "${user_packages_dir}"/*.apk; do
+    local app_id
+    app_id=$(basename "${app_filename}" .apk)
+
+    install_apk "${screen_type}" "${user_id}" "${app_filename}"
+  done
+}
+
 function install_front() {
   local users=("${FRONT_MAIN_USER_ID}" "${FRONT_COPILOT_USER_ID}")
 
@@ -504,6 +542,7 @@ function install_front() {
   for user_id in "${users[@]}"; do
     local screen_type
     local user_apps=()
+
     if [ "${user_id}" == "${FRONT_MAIN_USER_ID}" ]; then
       screen_type="${SCREEN_TYPE_DRIVER}"
       user_apps=("${APPS_SCREEN_TYPE_DRIVER[@]}")
@@ -520,6 +559,9 @@ function install_front() {
     for app_id in "${apps[@]}"; do
       install_carmodapps_app "${screen_type}" "${app_id}" "${user_id}"
     done
+
+    # Install custom packages
+    install_custom_packages "${screen_type}" "${user_id}"
   done
 }
 
@@ -534,6 +576,9 @@ function install_rear() {
   for app_id in "${apps[@]}"; do
     install_carmodapps_app "${SCREEN_TYPE_REAR}" "${app_id}" "${user_id}"
   done
+
+  # Install custom packages
+  install_custom_packages "${SCREEN_TYPE_REAR}" "${user_id}"
 }
 
 function _check_all_apps_exists() {
@@ -776,25 +821,18 @@ function usage() {
   -v, --verbose: Выводить подробную информацию
   -f, --force: Принудительно установить приложения, даже если они уже установлены
 
-Хранилище приложений:
-  Приложения CarModApps хранятся в каталоге packages/carmodapps
-  Пользовательские приложения хранятся в каталоге packages/user
+Для добавления своих приложений положите apk в папки:
 
-Добавление пользовательских приложений:
+   packages/custom/driver   Для экрана водителя
+   packages/custom/copilot  Для экрана пассажира
+   packages/custom/rear     Для заднего экрана
 
-  1. Положите apk файлы приложений в каталог packages/user
-     ВАЖНО: Имя файла должно начинаться с идентификатора приложения
-     Пример: com.example.myapp-1.0.0.apk
+Кастомизация настроек (для продвинутых пользователей):
 
-  2. Создайте файл user_settings.sh и добавьте в соответствующие массивы ваше приложение:
-
-     APPS_ALL_SCREENS: список приложений для всех экранов
-     APPS_SCREEN_TYPE_DRIVER: список приложений для экрана водителя
-     APPS_SCREEN_TYPE_COPILOT: список приложений для экрана пассажира
-     APPS_SCREEN_TYPE_REAR: список приложений для заднего экрана
-
-     Пример:
-        APPS_ALL_SCREENS+=("com.example.myapp")
+  1. Создайте файл user_settings.sh
+  2. Добавьте в него переопределение переменных
+     Пример добавления установки Angry birds из CarModApps на все экраны:
+        APPS_ALL_SCREENS+=("com.rovio.angrybirds")
 EOF
 }
 
