@@ -409,9 +409,9 @@ function post_install_app_swiftkey() {
   local user_id=$2
 
   run_adb shell ime disable --user "${user_id}" com.baidu.input/.ImeService &&
-    run_adb shell ime disable --user $user_id com.android.inputmethod.latin/.LatinIME &&
-    run_adb shell ime enable --user $user_id com.touchtype.swiftkey/com.touchtype.KeyboardService &&
-    run_adb shell ime set --user $user_id com.touchtype.swiftkey/com.touchtype.KeyboardService
+    run_adb shell ime disable --user "$user_id" com.android.inputmethod.latin/.LatinIME &&
+    run_adb shell ime enable --user "${user_id}" com.touchtype.swiftkey/com.touchtype.KeyboardService &&
+    run_adb shell ime set --user "${user_id}" com.touchtype.swiftkey/com.touchtype.KeyboardService
 
   if [ $? -ne 0 ]; then
     log_error "[${screen_type}] Настройка SwiftKey: ошибка"
@@ -657,7 +657,7 @@ function check_all_apps_exists() {
 
   if ${error_missing_apps}; then
     log_error "Для автоматического скачивания приложений CarModApps необходимо выполнить команду \"${SCRIPT_BASENAME} update\""
-    log_error "Для ручного добавления сторонних приложений смотрите инструкцию:  $(basename $0) -h"
+    log_error "Для ручного добавления сторонних приложений смотрите инструкцию: $(basename "$0") -h"
   fi
 
   if ${error_duplicate_apps}; then
@@ -839,10 +839,10 @@ function usage() {
 ----------------------------------------------------------------------------
 Скрипт для установки приложений CarModApps для автомобилей Li Auto (Lixiang)
 Версия: ${VERSION}
-Сайт: http://carmodapps.com, Telegram: https://t.me/carmodapps
+Сайт: https://carmodapps.com, Telegram: https://t.me/carmodapps
 ----------------------------------------------------------------------------
 
-Использование: $(basename $0) [options] [<команда>]
+Использование: $(basename "${0}") [options] [<команда>]
 
 По-умолчанию выполняется update + install
 
