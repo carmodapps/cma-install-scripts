@@ -300,32 +300,52 @@ function get_installed_package_info() {
   local app_id=$1
   local user_id=$2
 
+  #  log_verbose "[${app_id}][user:${user_id}] Получение информации об установленном приложении..."
+
   local adb_output
   adb_output=$(
-    _run_adb shell dumpsys package --user "${user_id}" "${app_id}" |
-      awk '/^[ ]*Package \[.*\] (.*)/ { i = index($0, "[") + 1; pkg = substr($0, i, index($0, "]") - i); printf "\n%s", pkg; } /[ ]*versionName=/ { { printf "\t%s", $0; } }  /[ ]*versionCode=/ { { printf  "\t%s", $0; } } ' |
-      grep "${app_id}"
+    _run_adb shell dumpsys package |
+      awk -v app_id="$app_id" -v user_id="$user_id" '
+      $0 ~ "Package \\[" app_id "\\]" {
+        package_found = 1
+      }
+      package_found && $0 ~ /versionCode=/ {
+        split($0, version_code_array, " ")
+        for (i in version_code_array) {
+          if (version_code_array[i] ~ /^versionCode=/) {
+            split(version_code_array[i], vc, "=")
+            version_code = vc[2]
+            break
+          }
+        }
+      }
+      package_found && $0 ~ /versionName=/ {
+        version_name = substr($0, index($0, "versionName=") + 12)
+      }
+      package_found && $0 ~ "User " user_id ":" {
+        user_line = $0
+        if (user_line ~ /installed=true/) {
+          print app_id "\t" version_code "\t" version_name
+        }
+        package_found = 0
+      }
+    '
   )
 
-  #  log_verbose "[${app_id}] adb_output: ${adb_output}"
+  if [ $? -ne 0 ]; then
+    log_error "[${app_id}][user:${user_id}] Ошибка получения информации о приложении"
+    exit 1
+  fi
+
+  log_verbose "[${app_id}][user:${user_id}] adb_output: ${adb_output}"
 
   # No output
   if [ -z "${adb_output}" ]; then
-    log_verbose "[${app_id}] Приложение не найдено"
+    log_verbose "[${app_id}][user:${user_id}] Приложение не установлено"
     return 1
   fi
 
-  local app_version_code
-  local app_version_name
-
-  # Output format:
-  # com.carmodapps.carstore      versionCode=21 minSdk=28 targetSdk=28           versionName=1.2
-  app_version_code=$(echo "$adb_output" | sed -n 's/.*versionCode=\([^ ]*\).*/\1/p' | xargs)
-  app_version_name=$(echo "$adb_output" | sed -n 's/.*versionName=\(.*\)$/\1/p' | xargs)
-
-  log_verbose "[${app_id}] Установленная версия приложения: ${app_version_name} (${app_version_code})"
-
-  printf "%s\t%s\t%s" "${app_id}" "${app_version_code}" "${app_version_name}"
+  echo "${adb_output}"
 }
 
 #
