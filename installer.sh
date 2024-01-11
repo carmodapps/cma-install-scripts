@@ -155,7 +155,7 @@ function _unique_str_list() {
 }
 
 function _run_adb() {
-  log_verbose "adb \"$*\""
+  log_verbose "adb $*"
 
   if ! "$ADB" "$@"; then
     log_error "$ADB $*"
