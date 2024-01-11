@@ -469,7 +469,6 @@ function install_apk() {
         log_info "[${screen_type}] [${app_id}] Установленная версия apk совпадает с локальной, пропускаем установку: ${app_version_name} (${app_version_code})"
         return 0
       fi
-      return 0
     fi
 
     # if installed version code is greater than local version code
