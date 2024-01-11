@@ -178,6 +178,15 @@ function _run_adb() {
   fi
 }
 
+function run_apkanalyzer() {
+  log_verbose "apkanalyzer $*"
+
+  if ! "${APKANALYZER}" "$@"; then
+    log_error "${APKANALYZER} $*"
+    return 1
+  fi
+}
+
 #################################################################
 # CPU/Screen types helpers
 
@@ -409,7 +418,7 @@ function install_apk() {
   # Get local app info
   #
   local apkanalyzer_str
-  apkanalyzer_str=$(${APKANALYZER} apk summary "${app_filename}")
+  apkanalyzer_str=$(run_apkanalyzer apk summary "${app_filename}")
 
   local app_id
   local app_version_code
