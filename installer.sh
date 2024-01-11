@@ -1,10 +1,4 @@
-#!/usr/bin/env bash
-
-# Require bash 4.0+
-if [ -z "${BASH_VERSION}" ] || [ "${BASH_VERSION%%.*}" -lt 4 ]; then
-  echo "Требуется bash версии 4.0 и выше, текущая версия: ${BASH_VERSION}"
-  exit 1
-fi
+#!/bin/bash
 
 #################################################################
 # Settings
@@ -42,10 +36,21 @@ REAR_SCREEN_APPS=(
   "com.netflix.NGP.TerraNil"
 )
 
-# Разрешения appops для приложений, разделитель ";"
-# Пример: "REQUEST_INSTALL_PACKAGES;READ_EXTERNAL_STORAGE;WRITE_EXTERNAL_STORAGE"
-declare -A APPOPS
-APPOPS["com.carmodapps.carstore"]="REQUEST_INSTALL_PACKAGES"
+#################################################################
+# Разрешения appops для приложений
+#
+# Для добавления нового разрешения необходимо:
+#   1. Добавить его в APPOPS_TYPES
+#   2. Добавить в массив APPOPS_xxx нужные приложения
+
+# Все возможные типы разрешений
+APPOPS_TYPES=(
+  "REQUEST_INSTALL_PACKAGES"
+)
+
+APPOPS_REQUEST_INSTALL_PACKAGES=(
+  "com.carmodapps.carstore"
+)
 
 #################################################################
 # System vars
@@ -190,12 +195,22 @@ function _install_app(){
     log_info "[${screen_name}] [$app_id] Установка: успешно"
   fi
 
-  # Check APPOPS[app_id], format is "REQUEST_INSTALL_PACKAGES;READ_EXTERNAL_STORAGE;WRITE_EXTERNAL_STORAGE"
+  # Check APPOPS_xxx
+  local appops=() # Required appops for this app
   local opt
-  local appops=()
-  if [[ -v APPOPS[${app_id}] ]]; then
-      IFS=';' read -ra appops <<< "${APPOPS[${app_id}]}"
-  fi
+  for opt in "${APPOPS_TYPES[@]}"; do
+    local var_name="APPOPS_${opt}"
+    local appops_list=("${!var_name}")
+    local appops_app_id
+
+    for appops_app_id in "${appops_list[@]}"; do
+      if [ "${appops_app_id}" == "${app_id}" ]; then
+        appops+=("${opt}")
+      fi
+    done
+
+  done
+
 
   for opt in "${appops[@]}"; do
     log_info "[${screen_name}] [$app_id] Выдача разрешения ${opt}..."
