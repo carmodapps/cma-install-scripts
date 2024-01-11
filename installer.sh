@@ -3,6 +3,7 @@
 #################################################################
 # Settings
 
+# Таймзона по-умолчанию, если не удалось определить таймзону компьютера
 DEFAULT_TIMEZONE="Europe/Moscow"
 
 APPS_ALL_SCREENS=(
@@ -48,6 +49,7 @@ APPOPS_TYPES=(
   "REQUEST_INSTALL_PACKAGES"
 )
 
+# shellcheck disable=SC2034
 APPOPS_REQUEST_INSTALL_PACKAGES=(
   "com.carmodapps.carstore"
 )
