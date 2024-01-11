@@ -145,7 +145,7 @@ fi
 LOG_PREFIX="####LiAuto### "
 
 function log_info() {
-  echo -e "\033[32m${LOG_PREFIX} $1\033[0m" >&2
+  echo -e "\033[32m${LOG_PREFIX}$1\033[0m" >&2
 }
 
 function log_warn() {
@@ -158,7 +158,7 @@ function log_error() {
 
 function log_verbose() {
   if ${VERBOSE}; then
-    echo -e "\033[37m${LOG_PREFIX} $1\033[0m" >&2
+    echo -e "\033[37m${LOG_PREFIX}$1\033[0m" >&2
   fi
 }
 
