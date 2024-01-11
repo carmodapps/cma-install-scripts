@@ -56,7 +56,6 @@ APPOPS_REQUEST_INSTALL_PACKAGES=(
 # System vars
 
 ADB="adb"
-
 FRONT_MAIN_USER_ID=0
 FRONT_COPILOT_USER_ID=21473
 REAR_USER_ID=0
@@ -66,6 +65,34 @@ SCRIPT_BASENAME="$(basename "${BASH_SOURCE[0]}")"
 DOWNLOAD_DIR="${SCRIPT_DIR}/downloads"
 
 VERBOSE=false
+
+#################################################################
+# Setup 3rd party deps depending on OS
+
+PLATFORM_BINARY_PATH=""
+
+# Determine the platform and set the binary path
+case "$(uname -s)" in
+    Darwin)
+        # Mac OS X platform
+        PLATFORM_BINARY_PATH="mac/$(uname -m)"
+        ;;
+    Linux)
+        # Linux platform
+        PLATFORM_BINARY_PATH="linux/$(uname -m)"
+        ;;
+    *)
+        echo "Неизвестная платформа: $(uname -s)"
+        exit 1
+        ;;
+esac
+
+ADB="${SCRIPT_DIR}/3rd_party/bin/${PLATFORM_BINARY_PATH}/adb"
+
+if [ ! -f "${ADB}" ]; then
+  echo "ADB не найден: ${ADB}"
+  exit 1
+fi
 
 #################################################################
 # Logging
@@ -92,10 +119,10 @@ function _unique_str_list(){
 
 function _run_adb(){
   if [ "${VERBOSE}" == "true" ]; then
-    echo "$ADB $*"
+    echo "adb \"$*\"" >&2
   fi
 
-  if ! $ADB "$@"; then
+  if ! "$ADB" "$@"; then
     log_error "$ADB $*"
     return 1
   fi
