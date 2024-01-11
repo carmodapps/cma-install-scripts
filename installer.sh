@@ -5,7 +5,7 @@
 
 DEFAULT_TIMEZONE="Europe/Moscow"
 
-ALL_SCREEN_APPS=(
+APPS_ALL_SCREENS=(
   # "Системные приложения"
   "com.carmodapps.carstore"
   "com.touchtype.swiftkey"
@@ -17,7 +17,7 @@ ALL_SCREEN_APPS=(
   "ru.yandex.music"
 )
 
-DRIVER_SCREEN_APPS=(
+APPS_SCREEN_TYPE_DRIVER=(
   # Приложения для экрана водителя
   "ru.yandex.yandexnavi"
   "to.chargers"
@@ -25,12 +25,12 @@ DRIVER_SCREEN_APPS=(
   # air.StrelkaHUDFREE # Вроде пока нет пермишена
 )
 
-PASSENGER_SCREEN_APPS=(
+APPS_SCREEN_TYPE_COPILOT=(
   # Приложения для экрана пассажира
   # (Они будут также установлены на водительский, т.к. пока нет возможности установить только на пассажирский)
 )
 
-REAR_SCREEN_APPS=(
+APPS_SCREEN_TYPE_REAR=(
   # Приложения для экрана задних пассажиров
   "com.rovio.angrybirds"
   "com.netflix.NGP.TerraNil"
@@ -355,16 +355,16 @@ function install_front() {
     local user_apps=()
     if [ "${user_id}" == "${FRONT_MAIN_USER_ID}" ]; then
       screen_type="${SCREEN_TYPE_DRIVER}"
-      user_apps=("${DRIVER_SCREEN_APPS[@]}")
+      user_apps=("${APPS_SCREEN_TYPE_DRIVER[@]}")
     else
       screen_type="${SCREEN_TYPE_COPILOT}"
-      user_apps=("${PASSENGER_SCREEN_APPS[@]}")
+      user_apps=("${APPS_SCREEN_TYPE_COPILOT[@]}")
 
       _disable_psglauncher "${screen_type}" "${user_id}"
     fi
 
     # Install all apps
-    local apps=("${ALL_SCREEN_APPS[@]}" "${user_apps[@]}")
+    local apps=("${APPS_ALL_SCREENS[@]}" "${user_apps[@]}")
     local app_id
     for app_id in "${apps[@]}"; do
       _install_app "${screen_type}" "${app_id}" "${user_id}"
@@ -374,7 +374,7 @@ function install_front() {
 
 function install_rear() {
   local user_id="${REAR_USER_ID}"
-  local apps=("${ALL_SCREEN_APPS[@]}" "${REAR_SCREEN_APPS[@]}")
+  local apps=("${APPS_ALL_SCREENS[@]}" "${APPS_SCREEN_TYPE_REAR[@]}")
 
   _disable_psglauncher "${SCREEN_TYPE_REAR}" "${user_id}"
 
@@ -392,7 +392,7 @@ function _check_all_apps_exists(){
   local error_duplicate_apps=false
   local exit_code=0
 
-  all_apps="${ALL_SCREEN_APPS[*]} ${DRIVER_SCREEN_APPS[*]} ${PASSENGER_SCREEN_APPS[*]}${REAR_SCREEN_APPS[*]}"
+  all_apps="${APPS_ALL_SCREENS[*]} ${APPS_SCREEN_TYPE_DRIVER[*]} ${APPS_SCREEN_TYPE_COPILOT[*]}${APPS_SCREEN_TYPE_REAR[*]}"
   all_apps=$(_unique_str_list "${all_apps}")
 
   for app_id in ${all_apps}; do
