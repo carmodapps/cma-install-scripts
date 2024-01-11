@@ -494,31 +494,47 @@ function do_install(){
 
 }
 
-function do_delete(){
+function delete_for_user(){
+  local screen_type=$1
+  local user_id=$2
   local non_system_apps
+
+  non_system_apps=$(_run_adb shell pm list packages --user "${user_id}" -3 | cut -d':' -f2 | tr -d '\r' | tr '\n' ' ')
+
+  if [ -z "$non_system_apps" ]; then
+    log_info "[${screen_type}] Нет приложений для удаления"
+    return 0
+  fi
+
+  log_info "[${screen_type}] Удаление всех приложений, кроме системных..."
+
+  for app_id in ${non_system_apps}; do
+    log_info "[${screen_type}] Удаление ${app_id}..."
+
+    if ! _run_adb uninstall --user "${user_id}" "${app_id}"; then
+      log_error "[${screen_type}] Удаление ${app_id}: ошибка"
+      return 1
+    else
+      log_info "[${screen_type}] Удаление ${app_id}: успешно"
+    fi
+  done
+}
+
+function do_delete(){
   local cpu_type
 
   cpu_type=$(wait_for_device)
 
-  non_system_apps=$(_run_adb shell pm list packages -3 | cut -d':' -f2 | tr -d '\r' | tr '\n' ' ')
-
-  if [ -z "$non_system_apps" ]; then
-    log_info "Нет приложений для удаления"
-    return 0
-  fi
-
-  log_info "Удаление всех приложений, кроме системных..."
-
-  for app_id in ${non_system_apps}; do
-    log_info "Удаление ${app_id}..."
-
-    if ! _run_adb uninstall "${app_id}"; then
-      log_error "Удаление ${app_id}: ошибка"
-      return 1
-    else
-      log_info "Удаление ${app_id}: успешно"
-    fi
-  done
+  case "${cpu_type}" in
+    "${CPU_TYPE_FRONT}")
+      delete_for_user "${SCREEN_TYPE_DRIVER}" "${FRONT_MAIN_USER_ID}"
+      delete_for_user "${SCREEN_TYPE_COPILOT}" "${FRONT_COPILOT_USER_ID}"
+      ;;
+    "${CPU_TYPE_REAR}")
+      delete_for_user "${SCREEN_TYPE_REAR}" "${REAR_USER_ID}"
+      ;;
+    # Default will be handled in wait_for_device()
+  esac
 }
 
 function do_update(){
