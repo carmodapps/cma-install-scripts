@@ -67,6 +67,16 @@ DOWNLOAD_DIR="${SCRIPT_DIR}/downloads"
 VERBOSE=false
 
 #################################################################
+# CPU/Screen types
+
+CPU_TYPE_FRONT="front"
+CPU_TYPE_REAR="rear"
+
+SCREEN_TYPE_DRIVER="driver"
+SCREEN_TYPE_COPILOT="copilot"
+SCREEN_TYPE_REAR="rear"
+
+#################################################################
 # Setup 3rd party deps depending on OS
 
 PLATFORM_BINARY_PATH=""
@@ -103,15 +113,15 @@ fi
 LOG_PREFIX="####LiAuto### "
 
 function log_info() {
-  echo -e "\033[32m${LOG_PREFIX} $1\033[0m"
+  echo -e "\033[32m${LOG_PREFIX} $1\033[0m" >&2
 }
 
 function log_warn() {
-  echo -e "\033[33m${LOG_PREFIX}[Предупреждение] $1\033[0m"
+  echo -e "\033[33m${LOG_PREFIX}[Предупреждение] $1\033[0m" >&2
 }
 
 function log_error() {
-  echo -e "\033[31m${LOG_PREFIX}[Ошибка] $1\033[0m"
+  echo -e "\033[31m${LOG_PREFIX}[Ошибка] $1\033[0m" >&2
 }
 #################################################################
 
@@ -130,6 +140,54 @@ function _run_adb(){
     return 1
   fi
 }
+
+#################################################################
+# CPU/Screen types helpers
+
+function get_cpu_type(){
+  local product_type=$1
+
+  case "${product_type}" in
+    HU_SS2MAXF)
+      echo "${CPU_TYPE_FRONT}"
+      ;;
+    HU_SS2MAXR)
+      echo "${CPU_TYPE_REAR}"
+      ;;
+    *)
+      log_error "Неизвестный тип CPU: ${product_type}"
+      exit 1
+      ;;
+  esac
+}
+
+function get_screen_type(){
+  local cpu_type=$1
+  local user_id=$2
+
+  if [ "${cpu_type}" == "${CPU_TYPE_FRONT}" ]; then
+    if [ "${user_id}" == "${FRONT_MAIN_USER_ID}" ]; then
+      echo "${SCREEN_TYPE_DRIVER}"
+    elif [ "${user_id}" == "${FRONT_COPILOT_USER_ID}" ]; then
+      echo "${SCREEN_TYPE_COPILOT}"
+    else
+      log_error "Неизвестный user_id: ${user_id}, cpu_type: ${cpu_type}"
+      exit 1
+    fi
+  elif [ "${cpu_type}" == "${CPU_TYPE_REAR}" ]; then
+    if [ "${user_id}" == "${REAR_USER_ID}" ]; then
+      echo "${SCREEN_TYPE_REAR}"
+    else
+      log_error "Неизвестный user_id: ${user_id}, cpu_type: ${cpu_type}"
+      exit 1
+    fi
+  else
+    log_error "Неизвестный тип CPU: ${cpu_type}, cpu_type: ${cpu_type}"
+    exit 1
+  fi
+}
+
+#################################################################
 
 function set_timezone(){
   local timezone
@@ -389,6 +447,7 @@ function do_display_vin(){
 
 function do_install(){
   local product_type
+  local cpu_type
 
   if ! _check_all_apps_exists; then
     exit 1
@@ -397,27 +456,33 @@ function do_install(){
   _wait_for_device
 
   product_type=$(_run_adb shell getprop ro.build.product)
+  cpu_type=$(get_cpu_type "${product_type}")
 
-  if [ "${product_type}" == "HU_SS2MAXF" ]; then
-    log_info "############################################################"
-    log_info "# Обнаружен передний CPU: ${product_type}"
-    log_info "############################################################"
+  case "${cpu_type}" in
+    "${CPU_TYPE_FRONT}")
+      log_info "############################################################"
+      log_info "# Обнаружен передний CPU: ${product_type}"
+      log_info "############################################################"
 
-    set_timezone
-    set_night_mode
-    install_max_front
+      set_timezone
+      set_night_mode
+      install_max_front
+      ;;
+    "${CPU_TYPE_REAR}")
+      log_info "############################################################"
+      log_info "# Обнаружен задний CPU: ${product_type}"
+      log_info "############################################################"
 
-  elif [ "${product_type}" == "HU_SS2MAXR" ]; then
-    log_info "############################################################"
-    log_info "# Обнаружен задний CPU: ${product_type}"
-    log_info "############################################################"
+      set_timezone
+      set_night_mode
+      install_max_rear
+      ;;
+    *)
+      log_error "Неизвестный тип CPU: ${product_type}"
+      exit 1
+      ;;
+  esac
 
-    set_timezone
-    set_night_mode
-    install_max_rear
-  else
-    log_error "Неизвестный тип CPU: ${product_type}"
-  fi
 }
 
 function do_delete(){
