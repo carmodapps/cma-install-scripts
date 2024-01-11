@@ -123,6 +123,13 @@ function log_warn() {
 function log_error() {
   echo -e "\033[31m${LOG_PREFIX}[Ошибка] $1\033[0m" >&2
 }
+
+function log_verbose() {
+  if ${VERBOSE}; then
+    echo -e "\033[37m${LOG_PREFIX} $1\033[0m" >&2
+  fi
+}
+
 #################################################################
 
 function _unique_str_list(){
@@ -131,9 +138,7 @@ function _unique_str_list(){
 }
 
 function _run_adb(){
-  if [ "${VERBOSE}" == "true" ]; then
-    echo "adb \"$*\"" >&2
-  fi
+  log_verbose "adb \"$*\""
 
   if ! "$ADB" "$@"; then
     log_error "$ADB $*"
@@ -515,7 +520,7 @@ function do_update(){
   local api_url="https://store.carmodapps.com/api/applications/download"
   local apps_url_list
 
-  log_info "Загрузка приложений с сервера CarModApps..."
+  log_info "Проверка обновлений приложений..."
 
   apps_url_list=$(curl -s -G -H "Accept: text/plain" "${api_url}")
 
@@ -537,7 +542,7 @@ function do_update(){
 
     app_local_filename="${DOWNLOAD_DIR}/${app_filename}"
     if [ -f "${app_local_filename}" ]; then
-      log_info "[${app_id}] Уже загружен, пропускаем..."
+      log_verbose "[${app_id}] Уже загружен, пропускаем..."
     else
       log_info "[${app_id}] Загрузка..."
 
@@ -561,6 +566,8 @@ function do_update(){
     done < <(eval "_find_app_files ${app_id}")
   done
 
+  log_info "Проверка обновлений приложений: успешно"
+
 }
 
 #################################################################
@@ -569,7 +576,7 @@ function usage() {
     cat <<EOF
 Использование: $(basename $0) [options] [<команда>]
 
-По-умолчанию выполняется установка приложений (install)
+По-умолчанию выполняется update + install
 
 Команды:
   vin: Отобразить VIN
@@ -586,7 +593,7 @@ EOF
 #################################################################
 
 function main() {
-  local cmd="install"
+  local cmd
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -619,8 +626,8 @@ function main() {
   elif [ "${cmd}" == "delete" ]; then
     do_delete
   else
-    log_error "Неизвестная команда: ${cmd}"
-    usage
+    do_update
+    do_install
     exit 1
   fi
 }
