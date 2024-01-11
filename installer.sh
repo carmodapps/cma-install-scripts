@@ -69,12 +69,12 @@ VERBOSE=false
 #################################################################
 # CPU/Screen types
 
-CPU_TYPE_FRONT="front"
-CPU_TYPE_REAR="rear"
+CPU_TYPE_FRONT="Передний CPU"
+CPU_TYPE_REAR="Задний CPU"
 
-SCREEN_TYPE_DRIVER="driver"
-SCREEN_TYPE_COPILOT="copilot"
-SCREEN_TYPE_REAR="rear"
+SCREEN_TYPE_DRIVER="Экран водителя"
+SCREEN_TYPE_COPILOT="Экран пассажира"
+SCREEN_TYPE_REAR="Задний экран"
 
 #################################################################
 # Setup 3rd party deps depending on OS
@@ -256,7 +256,7 @@ function _get_app_files_count(){
 }
 
 function post_install_app_swiftkey(){
-  local screen_name=$1
+  local screen_type=$1
   local user_id=$2
 
   _run_adb shell ime disable --user "${user_id}" com.baidu.input/.ImeService && \
@@ -265,15 +265,15 @@ function post_install_app_swiftkey(){
   _run_adb shell ime set --user $user_id com.touchtype.swiftkey/com.touchtype.KeyboardService
 
   if [ $? -ne 0 ]; then
-    log_error "[${screen_name}] Настройка SwiftKey: ошибка"
+    log_error "[${screen_type}] Настройка SwiftKey: ошибка"
     return 1
   else
-    log_info "[${screen_name}] Настройка SwiftKey: успешно"
+    log_info "[${screen_type}] Настройка SwiftKey: успешно"
   fi
 }
 
 function _install_app(){
-  local screen_name=$1
+  local screen_type=$1
   local app_id=$2
   local user_id=$3
   local app_filename
@@ -282,22 +282,22 @@ function _install_app(){
   app_filename=$(find "${DOWNLOAD_DIR}" -name "${app_id}*.apk" | head -n 1)
 
   if [ -z "${app_filename}" ]; then
-    log_error "[${screen_name}] [$app_id] Файл не найден в каталоге загрузок: ${DOWNLOAD_DIR}"
+    log_error "[${screen_type}] [$app_id] Файл не найден в каталоге загрузок: ${DOWNLOAD_DIR}"
     return 1
   fi
 
   if [ ! -f "${app_filename}" ]; then
-    log_error "[${screen_name}] [$app_id] Файл не найден: ${app_filename}"
+    log_error "[${screen_type}] [$app_id] Файл не найден: ${app_filename}"
     return 1
   fi
 
-  log_info "[${screen_name}] [$app_id] Установка..."
+  log_info "[${screen_type}] [$app_id] Установка..."
 
   if ! _run_adb install -r -g --user "${user_id}" "${app_filename}"; then
-    log_error "[${screen_name}] [$app_id] Установка: ошибка"
+    log_error "[${screen_type}] [$app_id] Установка: ошибка"
     return 1
   else
-    log_info "[${screen_name}] [$app_id] Установка: успешно"
+    log_info "[${screen_type}] [$app_id] Установка: успешно"
   fi
 
   # Check APPOPS_xxx
@@ -318,28 +318,28 @@ function _install_app(){
 
 
   for opt in "${appops[@]}"; do
-    log_info "[${screen_name}] [$app_id] Выдача разрешения ${opt}..."
+    log_info "[${screen_type}] [$app_id] Выдача разрешения ${opt}..."
 
     if ! _run_adb shell appops set --user "${user_id}" "${app_id}" "${opt}" allow; then
-      log_error "[${screen_name}] [$app_id] Выдача разрешения ${opt}: ошибка"
+      log_error "[${screen_type}] [$app_id] Выдача разрешения ${opt}: ошибка"
       return 1
     else
-      log_info "[${screen_name}] [$app_id] Выдача разрешения ${opt}: успешно"
+      log_info "[${screen_type}] [$app_id] Выдача разрешения ${opt}: успешно"
     fi
   done
 
   if [ "${app_id}" == "com.touchtype.swiftkey" ]; then
-    if ! post_install_app_swiftkey "${screen_name}" "${user_id}"; then
+    if ! post_install_app_swiftkey "${screen_type}" "${user_id}"; then
       return 1
     fi
   fi
 }
 
 function _disable_psglauncher(){
-  local screen_name=$1
+  local screen_type=$1
   local user_id=$2
 
-  log_info "[${screen_name}] Отключение PSGLauncher"
+  log_info "[${screen_type}] Отключение PSGLauncher"
 
   _run_adb shell pm disable-user --user "${user_id}" com.lixiang.psglauncher
   _run_adb shell pm clear --user "${user_id}" com.lixiang.psglauncher
@@ -351,38 +351,37 @@ function install_front() {
 
   local user_id
   for user_id in "${users[@]}"; do
-    local screen_name
+    local screen_type
     local user_apps=()
     if [ "${user_id}" == "${FRONT_MAIN_USER_ID}" ]; then
-      screen_name="Экран водителя"
+      screen_type="${SCREEN_TYPE_DRIVER}"
       user_apps=("${DRIVER_SCREEN_APPS[@]}")
     else
-      screen_name="Экран пассажира"
+      screen_type="${SCREEN_TYPE_COPILOT}"
       user_apps=("${PASSENGER_SCREEN_APPS[@]}")
 
-      _disable_psglauncher "${screen_name}" "${user_id}"
+      _disable_psglauncher "${screen_type}" "${user_id}"
     fi
 
     # Install all apps
     local apps=("${ALL_SCREEN_APPS[@]}" "${user_apps[@]}")
     local app_id
     for app_id in "${apps[@]}"; do
-      _install_app "${screen_name}" "${app_id}" "${user_id}"
+      _install_app "${screen_type}" "${app_id}" "${user_id}"
     done
   done
 }
 
 function install_rear() {
-  local screen_name="Экран задних пассажиров"
   local user_id="${REAR_USER_ID}"
   local apps=("${ALL_SCREEN_APPS[@]}" "${REAR_SCREEN_APPS[@]}")
 
-  _disable_psglauncher "${screen_name}" "${user_id}"
+  _disable_psglauncher "${SCREEN_TYPE_REAR}" "${user_id}"
 
   # Install all apps
   local app_id
   for app_id in "${apps[@]}"; do
-    _install_app "${screen_name}" "${app_id}" "${user_id}"
+    _install_app "${SCREEN_TYPE_REAR}" "${app_id}" "${user_id}"
   done
 }
 
@@ -453,18 +452,7 @@ function wait_for_device(){
   cpu_type=$(get_cpu_type "${product_type}")
   vin=$(get_vin "${cpu_type}")
 
-  case "${cpu_type}" in
-    "${CPU_TYPE_FRONT}")
-      log_info "Обнаружен передний CPU: ${product_type}, VIN: ${vin}"
-      ;;
-    "${CPU_TYPE_REAR}")
-      log_info "Обнаружен задний CPU: ${product_type}, VIN: ${vin}"
-      ;;
-    *)
-      log_error "Неизвестный тип CPU: ${product_type}"
-      exit 1
-      ;;
-  esac
+  log_info "Устройство найдено: ${cpu_type} (VIN: ${vin})"
 
   echo "${cpu_type}"
 }
