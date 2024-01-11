@@ -688,6 +688,13 @@ function do_delete() {
   esac
 }
 
+function do_check_self_updates() {
+  log_verbose "Проверка обновлений скрипта..."
+
+  # FIXME: Сделать проверку, сравнение версий,
+  #  а также добавить update.sh (может качать с github и запускать?)
+}
+
 function do_update() {
   local api_url="https://store.carmodapps.com/api/applications/download"
   local apps_url_list
@@ -825,10 +832,12 @@ function main() {
     do_install
     do_display_vin
   elif [ "${cmd}" == "update" ]; then
+    do_check_self_updates
     do_update
   elif [ "${cmd}" == "delete" ]; then
     do_delete
   else
+    do_check_self_updates
     do_update
     do_install
     exit 1
