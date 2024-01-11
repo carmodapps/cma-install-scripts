@@ -70,6 +70,14 @@ REAR_USER_ID=0
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 SCRIPT_BASENAME="$(basename "${BASH_SOURCE[0]}")"
 
+# read VERSION file
+VERSION_FILE="${SCRIPT_DIR}/VERSION"
+if [ -f "${VERSION_FILE}" ]; then
+  VERSION=$(cat "${VERSION_FILE}")
+else
+  VERSION="unknown"
+fi
+
 PACKAGES_DIR="${SCRIPT_DIR}/packages"
 PACKAGES_CMA_DIR="${PACKAGES_DIR}/carmodapps"
 PACKAGES_USER_DIR="${PACKAGES_DIR}/user"
@@ -740,6 +748,11 @@ function do_update() {
 
 function usage() {
   cat <<EOF
+----------------------------------------------------------------------------
+Скрипт для установки приложений CarModApps для автомобилей Li Auto (Lixiang)
+Версия: ${VERSION}
+----------------------------------------------------------------------------
+
 Использование: $(basename $0) [options] [<команда>]
 
 По-умолчанию выполняется update + install
