@@ -541,6 +541,8 @@ function do_update(){
   local api_url="https://store.carmodapps.com/api/applications/download"
   local apps_url_list
 
+  mkdir -p "${DOWNLOAD_DIR}"
+
   log_info "Проверка обновлений приложений..."
 
   apps_url_list=$(curl -s -G -H "Accept: text/plain" "${api_url}")
