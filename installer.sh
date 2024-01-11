@@ -6,6 +6,10 @@
 # Таймзона по-умолчанию, если не удалось определить таймзону компьютера
 DEFAULT_TIMEZONE="Europe/Moscow"
 
+# Если существует файл user_settings.sh, то он будет загружен
+# В нём можно переопределить переменные
+USER_DEFINED_SETTINGS_OVERRIDE_FILE="user_settings.sh"
+
 APPS_ALL_SCREENS=(
   # "Системные приложения"
   "com.carmodapps.carstore"
@@ -79,7 +83,7 @@ SCREEN_TYPE_COPILOT="Экран пассажира"
 SCREEN_TYPE_REAR="Задний экран"
 
 #################################################################
-# Setup 3rd party deps depending on OS
+# Setup Platform-specific vars
 
 PLATFORM_BINARY_PATH=""
 HOST_TIMEZONE=""
@@ -107,6 +111,14 @@ ADB="${SCRIPT_DIR}/3rd_party/bin/${PLATFORM_BINARY_PATH}/adb"
 if [ ! -f "${ADB}" ]; then
   echo "ADB не найден: ${ADB}"
   exit 1
+fi
+
+#################################################################
+# Handle USER_DEFINED_SETTINGS_OVERRIDE_FILE
+
+if [ -f "${USER_DEFINED_SETTINGS_OVERRIDE_FILE}" ]; then
+  # shellcheck disable=SC1090
+  source "${USER_DEFINED_SETTINGS_OVERRIDE_FILE}"
 fi
 
 #################################################################
