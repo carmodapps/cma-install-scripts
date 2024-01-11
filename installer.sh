@@ -226,6 +226,20 @@ function set_night_mode(){
   fi
 }
 
+function get_vin(){
+  local cpu_type=$1
+
+  local vin
+  vin=$(_run_adb shell getprop persist.sys.vehicle.vin)
+
+  if [ -z "${vin}" ]; then
+    log_error "VIN не найден"
+    exit 1
+  fi
+
+  echo "${vin}"
+}
+
 #
 # Find app files in DOWNLOAD_DIR
 # Return: list of files separated by \0
@@ -423,7 +437,11 @@ function _check_all_apps_exists(){
   return ${exit_code}
 }
 
-function _wait_for_device(){
+function wait_for_device(){
+  local product_type
+  local cpu_type
+  local vin
+
   log_info "Ожидание подключения устройства..."
 
   if ! _run_adb wait-for-device; then
@@ -431,56 +449,16 @@ function _wait_for_device(){
     exit 1
   fi
 
-  log_info "Устройство найдено"
-}
-
-function do_display_vin(){
-  _wait_for_device
-
-  local vin
-  vin=$(_run_adb shell getprop persist.sys.vehicle.vin)
-
-  if [ -z "${vin}" ]; then
-    log_error "VIN не найден"
-    exit 1
-  fi
-
-  log_info "############################################################"
-  log_info "VIN: ${vin}"
-  log_info "############################################################"
-}
-
-function do_install(){
-  local product_type
-  local cpu_type
-
-  if ! _check_all_apps_exists; then
-    exit 1
-  fi
-
-  _wait_for_device
-
   product_type=$(_run_adb shell getprop ro.build.product)
   cpu_type=$(get_cpu_type "${product_type}")
+  vin=$(get_vin "${cpu_type}")
 
   case "${cpu_type}" in
     "${CPU_TYPE_FRONT}")
-      log_info "############################################################"
-      log_info "# Обнаружен передний CPU: ${product_type}"
-      log_info "############################################################"
-
-      set_timezone
-      set_night_mode
-      install_max_front
+      log_info "Обнаружен передний CPU: ${product_type}, VIN: ${vin}"
       ;;
     "${CPU_TYPE_REAR}")
-      log_info "############################################################"
-      log_info "# Обнаружен задний CPU: ${product_type}"
-      log_info "############################################################"
-
-      set_timezone
-      set_night_mode
-      install_max_rear
+      log_info "Обнаружен задний CPU: ${product_type}, VIN: ${vin}"
       ;;
     *)
       log_error "Неизвестный тип CPU: ${product_type}"
@@ -488,12 +466,51 @@ function do_install(){
       ;;
   esac
 
+  echo "${cpu_type}"
+}
+
+function do_display_vin(){
+  local cpu_type
+  local vin
+
+  cpu_type=$(wait_for_device)
+  vin=$(get_vin "${cpu_type}")
+
+  log_info "############################################################"
+  log_info "VIN: ${vin}"
+  log_info "############################################################"
+}
+
+function do_install(){
+  local cpu_type
+
+  if ! _check_all_apps_exists; then
+    exit 1
+  fi
+
+  cpu_type=$(wait_for_device)
+
+  case "${cpu_type}" in
+    "${CPU_TYPE_FRONT}")
+      set_timezone
+      set_night_mode
+      install_max_front
+      ;;
+    "${CPU_TYPE_REAR}")
+      set_timezone
+      set_night_mode
+      install_max_rear
+      ;;
+    # Default will be handled in wait_for_device()
+  esac
+
 }
 
 function do_delete(){
   local non_system_apps
+  local cpu_type
 
-  _wait_for_device
+  cpu_type=$(wait_for_device)
 
   non_system_apps=$(_run_adb shell pm list packages -3 | cut -d':' -f2 | tr -d '\r' | tr '\n' ' ')
 
