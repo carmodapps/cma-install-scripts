@@ -27,7 +27,7 @@ APPS_SCREEN_TYPE_DRIVER=(
   "ru.yandex.yandexnavi"
   "to.chargers"
   "com.maxxt.pcradio"
-  # air.StrelkaHUDFREE # Вроде пока нет пермишена
+  "air.StrelkaHUDFREE"
 )
 
 APPS_SCREEN_TYPE_COPILOT=(
@@ -395,7 +395,7 @@ function install_front() {
       screen_type="${SCREEN_TYPE_COPILOT}"
       user_apps=("${APPS_SCREEN_TYPE_COPILOT[@]}")
 
-      _disable_psglauncher "${screen_type}" "${user_id}"
+      _disable_psglauncher "${screen_type}" "${FRONT_MAIN_USER_ID}"
     fi
 
     # Install all apps
