@@ -644,7 +644,7 @@ function install_front() {
     install_custom_packages "${screen_type}" "${user_id}"
 
     # Run at the end, because swiftkey is installed, but may be not available
-    tweak_ime_swiftkey "${SCREEN_TYPE_REAR}" "${user_id}"
+    tweak_ime_swiftkey "${screen_type}" "${user_id}"
 
     tweak_change_locale "${screen_type}" "${user_id}"
   done
@@ -653,22 +653,23 @@ function install_front() {
 function install_rear() {
   local user_id="${REAR_USER_ID}"
   local apps=("${APPS_ALL_SCREENS[@]}" "${APPS_SCREEN_TYPE_REAR[@]}")
+  local screen_type="${SCREEN_TYPE_REAR}"
 
-  tweak_disable_psglauncher "${SCREEN_TYPE_REAR}" "${user_id}"
+  tweak_disable_psglauncher "${screen_type}" "${user_id}"
 
   # Install all apps
   local app_id
   for app_id in "${apps[@]}"; do
-    install_carmodapps_app "${SCREEN_TYPE_REAR}" "${app_id}" "${user_id}"
+    install_carmodapps_app "${screen_type}" "${app_id}" "${user_id}"
   done
 
   # Install custom packages
-  install_custom_packages "${SCREEN_TYPE_REAR}" "${user_id}"
+  install_custom_packages "${screen_type}" "${user_id}"
 
   # Run at the end, because swiftkey is installed, but may be not available
-  tweak_ime_swiftkey "${SCREEN_TYPE_REAR}" "${user_id}"
+  tweak_ime_swiftkey "${screen_type}" "${user_id}"
 
-  tweak_change_locale "${SCREEN_TYPE_REAR}" "${user_id}"
+  tweak_change_locale "${screen_type}" "${user_id}"
 }
 
 function check_all_apps_exists() {
