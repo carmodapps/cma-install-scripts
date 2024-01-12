@@ -52,7 +52,7 @@ PERMISSIONS_APPOPS=(
 # System vars
 
 ADB="adb"
-APKANALYZER="apkanalyzer"
+AAPT="aapt"
 FRONT_MAIN_USER_ID=0
 FRONT_COPILOT_USER_ID=21473
 REAR_USER_ID=0
@@ -114,7 +114,7 @@ esac
 
 ADB="${SCRIPT_DIR}/3rd_party/bin/${PLATFORM_BINARY_PATH}/adb"
 
-# FIXME: Добавить APKANALYZER
+# FIXME: Добавить AAPT
 
 if [ ! -f "${ADB}" ]; then
   echo "ADB не найден: ${ADB}"
@@ -172,11 +172,11 @@ function run_adb() {
   fi
 }
 
-function run_apkanalyzer() {
-  log_verbose "apkanalyzer $*"
+function run_aapt() {
+  log_verbose "aapt $*"
 
-  if ! "${APKANALYZER}" "$@"; then
-    log_error "${APKANALYZER} $*"
+  if ! "$AAPT" "$@"; then
+    log_error "$AAPT $*"
     return 1
   fi
 }
@@ -364,6 +364,49 @@ function get_installed_package_info() {
   echo "${adb_output}"
 }
 
+# Return: app_id"\t"version_code"\t"version_name
+function get_apk_package_info() {
+  local file_name=$1
+  local aapt_output
+
+  aapt_output=$(
+    run_aapt dump badging "${file_name}" | awk -F"'" '
+    $1 ~ /package: name=/ { app_id = $2 }
+    $3 ~ / versionCode=/ { version_code = $4 }
+    $5 ~ / versionName=/ { version_name = $6 }
+    END { print app_id "\t" version_code "\t" version_name }
+  '
+  )
+
+  log_verbose "[$(basename "${file_name}")] aapt_output: ${aapt_output}"
+
+  if [ -z "${aapt_output}" ]; then
+    log_error "[$(basename "${file_name}")] Ошибка получения информации о приложении"
+    exit 1
+  fi
+
+  echo "${aapt_output}"
+}
+
+# Return permissions, separated by \n
+function get_apk_permissions() {
+  local file_name=$1
+  local aapt_output
+
+  aapt_output=$(
+    run_aapt dump badging "${file_name}" | awk -F"'" '/uses-permission: name=/ { print $2 }'
+  )
+
+  log_verbose "[$(basename "${file_name}")] aapt_output:\n${aapt_output}"
+
+  if [ -z "${aapt_output}" ]; then
+    log_verbose "[$(basename "${file_name}")] Приложение не имеет разрешений"
+    return 0
+  fi
+
+  echo "${aapt_output}"
+}
+
 #
 # Find app files in PACKAGES_CMA_DIR
 # Return: list of files separated by \0
@@ -424,15 +467,15 @@ function install_apk() {
   #
   # Get local app info
   #
-  local apkanalyzer_str
-  apkanalyzer_str=$(run_apkanalyzer apk summary "${app_filename}")
+  local pkginfo_str
+  pkginfo_str=$(get_apk_package_info "${app_filename}")
 
   local app_id
   local app_version_code
   local app_version_name
-  app_id=$(echo "${apkanalyzer_str}" | head -n 1 | cut -f1)
-  app_version_code=$(echo "${apkanalyzer_str}" | head -n 1 | cut -f2)
-  app_version_name=$(echo "${apkanalyzer_str}" | head -n 1 | cut -f3)
+  app_id=$(echo "${pkginfo_str}" | head -n 1 | cut -f1)
+  app_version_code=$(echo "${pkginfo_str}" | head -n 1 | cut -f2)
+  app_version_name=$(echo "${pkginfo_str}" | head -n 1 | cut -f3)
 
   log_verbose "[${screen_type}] [${app_id}] Локальная версия apk: ${app_version_name} (${app_version_code})"
 
@@ -494,7 +537,7 @@ function install_apk() {
   local appops=() # Required appops for this app
   local opt
   for opt in "${PERMISSIONS_APPOPS[@]}"; do
-    if run_apkanalyzer manifest permissions "${app_filename}" | grep -q "${opt}"; then
+    if get_apk_permissions "${app_filename}" | grep -q "${opt}"; then
       appops+=("${opt}")
     fi
   done
