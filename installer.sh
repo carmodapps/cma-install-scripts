@@ -168,7 +168,7 @@ function run_adb() {
 
   if ! "$ADB" "$@"; then
     log_error "$ADB $*"
-    return 1
+    exit 1
   fi
 }
 
@@ -177,7 +177,7 @@ function run_aapt() {
 
   if ! "$AAPT" "$@"; then
     log_error "$AAPT $*"
-    return 1
+    exit 1
   fi
 }
 
