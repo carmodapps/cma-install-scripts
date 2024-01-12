@@ -311,7 +311,7 @@ function tweak_disable_psglauncher() {
 
 #################################################################
 
-# Return: app_id\tapp_version_code\tapp_version_name
+# Return: app_id"\t"version_code"\t"version_name
 function get_installed_package_info() {
   local app_id=$1
   local user_id=$2
