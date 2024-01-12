@@ -1,7 +1,7 @@
 packages/*
 !packages/**/*.gitkeep
 
-
+/user_settings.sh
 
 .idea/
 
