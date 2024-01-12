@@ -574,29 +574,31 @@ function install_carmodapps_app() {
 function install_custom_packages() {
   local screen_type=$1
   local user_id=$2
-  local user_packages_dir
+  local custom_packages_dir
   local app_filename
 
-  user_packages_dir=$(get_custom_packages_dir "${screen_type}")
+  custom_packages_dir=$(get_custom_packages_dir "${screen_type}")
 
-  log_info "[${screen_type}] Проверка папки пользовательских приложений: ${user_packages_dir}"
+  log_info "[${screen_type}] Проверка папки пользовательских приложений: ${custom_packages_dir}"
 
-  local user_apps_count=0
-
-  # Read all apk files in user_packages_dir
+  # Collect all custom apps
+  local custom_apps_count=0
+  local custom_apps=()
   while IFS= read -r -d '' app_filename; do
-    local app_id
-    app_id=$(basename "${app_filename}" .apk)
+    custom_apps+=("${app_filename}")
+    custom_apps_count=$((custom_apps_count + 1))
+  done < <(find "${custom_packages_dir}" -name "*.apk" -print0)
 
+  log_verbose "[${screen_type}] Найдено пользовательских приложений: ${custom_apps_count}"
+
+  for app_filename in "${custom_apps[@]}"; do
     install_apk "${screen_type}" "${user_id}" "${app_filename}"
+  done
 
-    user_apps_count=$((user_apps_count + 1))
-  done < <(find "${user_packages_dir}" -name "*.apk" -print0)
-
-  if [ ${user_apps_count} -eq 0 ]; then
-    log_info "[${screen_type}] Нет пользовательских приложений для установки"
+  if [ ${custom_apps_count} -eq 0 ]; then
+    log_info "[${screen_type}] Нет пользовательских приложений"
   else
-    log_info "[${screen_type}] Установлено пользовательских приложений: ${user_apps_count}"
+    log_info "[${screen_type}] Обработано пользовательских приложений: ${custom_apps_count}"
   fi
 }
 
