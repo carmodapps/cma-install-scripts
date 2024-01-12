@@ -91,20 +91,21 @@ SCREEN_TYPE_REAR="Задний экран"
 #################################################################
 # Setup Platform-specific vars
 
-PLATFORM_BINARY_PATH=""
 HOST_TIMEZONE=""
 
 # Determine the platform and set the binary path
 case "$(uname -s)" in
 Darwin)
   # Mac OS X platform
-  PLATFORM_BINARY_PATH="mac/$(uname -m)"
   HOST_TIMEZONE=$(readlink /etc/localtime | sed 's#.*/zoneinfo/##')
+  ADB="${SCRIPT_DIR}/3rd_party/bin/mac/$(uname -m)/adb"
+  AAPT="${SCRIPT_DIR}/3rd_party/bin/mac/$(uname -m)/aapt"
   ;;
 Linux)
   # Linux platform
-  PLATFORM_BINARY_PATH="linux/$(uname -m)"
   HOST_TIMEZONE=$(cat /etc/timezone)
+  ADB="${SCRIPT_DIR}/3rd_party/bin/linux/adb"
+  AAPT="${SCRIPT_DIR}/3rd_party/bin/linux/aapt"
   ;;
 *)
   echo "Неизвестная платформа: $(uname -s)"
@@ -112,12 +113,13 @@ Linux)
   ;;
 esac
 
-ADB="${SCRIPT_DIR}/3rd_party/bin/${PLATFORM_BINARY_PATH}/adb"
-
-# FIXME: Добавить AAPT
-
 if [ ! -f "${ADB}" ]; then
   echo "ADB не найден: ${ADB}"
+  exit 1
+fi
+
+if [ ! -f "${AAPT}" ]; then
+  echo "AAPT не найден: ${AAPT}"
   exit 1
 fi
 

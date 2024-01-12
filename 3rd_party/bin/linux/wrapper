@@ -1,0 +1,30 @@
+#!/bin/bash
+
+NAME="$(realpath "$0")"
+TOOLNAME="$(basename "$0")"
+DIRNAME="$(dirname "${NAME}")"
+
+ARCH=$(uname -m)
+
+pushd "${DIRNAME}/${ARCH}" >/dev/null || exit
+
+export LD_LIBRARY_PATH=${DIRNAME}/${ARCH}/lib
+
+if [[ "${TOOLNAME}" == "aapt" ]] || [[ "${TOOLNAME}" == "aapt2" ]]; then
+  TOOLDIR=build-tools
+else
+  if [[ "${TOOLNAME}" == "adb" ]]; then
+    TOOLDIR=platform-tools
+  else
+    echo "Unknown tool"
+    exit
+  fi
+fi
+
+pushd "${TOOLDIR}" >/dev/null || exit
+
+./"${TOOLNAME}" "$@"
+
+popd >/dev/null || exit
+
+popd >/dev/null || exit
