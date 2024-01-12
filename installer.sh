@@ -587,15 +587,25 @@ function install_custom_packages() {
 
   user_packages_dir=$(get_custom_packages_dir "${screen_type}")
 
-  log_verbose "[${screen_type}] Проверка папки пользовательских приложений: ${user_packages_dir}"
+  log_info "[${screen_type}] Проверка папки пользовательских приложений: ${user_packages_dir}"
+
+  local user_apps_count=0
 
   # Read all apk files in user_packages_dir
-  for app_filename in "${user_packages_dir}"/*.apk; do
+  while IFS= read -r -d '' app_filename; do
     local app_id
     app_id=$(basename "${app_filename}" .apk)
 
     install_apk "${screen_type}" "${user_id}" "${app_filename}"
-  done
+
+    user_apps_count=$((user_apps_count + 1))
+  done < <(find "${user_packages_dir}" -name "*.apk" -print0)
+
+  if [ ${user_apps_count} -eq 0 ]; then
+    log_info "[${screen_type}] Нет пользовательских приложений для установки"
+  else
+    log_info "[${screen_type}] Установлено пользовательских приложений: ${user_apps_count}"
+  fi
 }
 
 function install_front() {
