@@ -332,6 +332,19 @@ function tweak_ime_swiftkey() {
   fi
 }
 
+function tweak_change_locale() {
+  local screen_type=$1
+  local user_id=$2
+  local locale="en_US"
+
+  log_info "[${screen_type}] Установка локали ${locale}..."
+
+  if ! shell am start --user "${user_id}" -n "com.carmodapps.carstore/.ChangeSystemLocaleActivity" --es locale "${locale}"; then
+    log_error "[${screen_type}] Установка локали ${locale}: ошибка"
+    return 1
+  fi
+}
+
 #################################################################
 
 # Return: app_id"\t"version_code"\t"version_name
@@ -632,6 +645,8 @@ function install_front() {
 
     # Run at the end, because swiftkey is installed, but may be not available
     tweak_ime_swiftkey "${SCREEN_TYPE_REAR}" "${user_id}"
+
+    tweak_change_locale "${screen_type}" "${user_id}"
   done
 }
 
@@ -652,6 +667,8 @@ function install_rear() {
 
   # Run at the end, because swiftkey is installed, but may be not available
   tweak_ime_swiftkey "${SCREEN_TYPE_REAR}" "${user_id}"
+
+  tweak_change_locale "${SCREEN_TYPE_REAR}" "${user_id}"
 }
 
 function check_all_apps_exists() {
