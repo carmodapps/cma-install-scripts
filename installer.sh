@@ -100,6 +100,14 @@ Darwin)
   HOST_TIMEZONE=$(readlink /etc/localtime | sed 's#.*/zoneinfo/##')
   ADB="${SCRIPT_DIR}/3rd_party/bin/mac/$(uname -m)/adb"
   AAPT="${SCRIPT_DIR}/3rd_party/bin/mac/$(uname -m)/aapt"
+
+  # Remove xattr from adb and aapt
+  for bin in "${ADB}" "${AAPT}"; do
+    if xattr "${bin}" | grep -q 'com.apple.quarantine'; then
+      echo "Удаление xattr: ${bin}"
+      xattr -d com.apple.quarantine "${bin}"
+    fi
+  done
   ;;
 Linux)
   # Linux platform
