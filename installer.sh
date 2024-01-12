@@ -294,7 +294,7 @@ function tweak_set_timezone() {
 
   if ! run_adb shell service call alarm 3 s16 "${timezone}" >/dev/null; then
     log_error "Установка часового пояса (${timezone}, ${origin}): ошибка"
-    return 1
+    return
   fi
 }
 
@@ -303,7 +303,7 @@ function tweak_set_night_mode() {
 
   if ! run_adb shell cmd uimode night yes; then
     log_error "Установка ночного режима: ошибка"
-    return 1
+    return
   fi
 }
 
@@ -328,7 +328,7 @@ function tweak_ime_swiftkey() {
 
   if [ $? -ne 0 ]; then
     log_error "[${screen_type}] Настройка SwiftKey: ошибка"
-    return 1
+    return
   fi
 }
 
@@ -381,7 +381,7 @@ function get_installed_package_info() {
   # No output
   if [ -z "${adb_output}" ]; then
     log_verbose "[${app_id}][user:${user_id}] Приложение не установлено"
-    return 1
+    return
   fi
 
   echo "${adb_output}"
@@ -424,7 +424,7 @@ function get_apk_permissions() {
 
   if [ -z "${aapt_output}" ]; then
     log_verbose "[$(basename "${file_name}")] Приложение не имеет разрешений"
-    return 0
+    return
   fi
 
   echo "${aapt_output}"
@@ -467,7 +467,7 @@ function install_apk() {
 
   if [ ! -f "${app_filename}" ]; then
     log_error "[${screen_type}] Файл не найден: ${app_filename}"
-    return 1
+    return
   fi
 
   #
@@ -506,7 +506,7 @@ function install_apk() {
         log_info "[${screen_type}] [${app_id}] Установленная версия apk совпадает с локальной, но установка принудительно включена, устанавливаем: ${app_version_name} (${app_version_code})"
       else
         log_info "[${screen_type}] [${app_id}] Установленная версия apk совпадает с локальной, пропускаем установку: ${app_version_name} (${app_version_code})"
-        return 0
+        return
       fi
     fi
 
@@ -520,11 +520,11 @@ function install_apk() {
         if ! run_adb uninstall "${app_id}"; then
           #if ! _run_adb uninstall --user "${user_id}" "${app_id}"; then
           log_error "[${screen_type}] [${app_id}] Удаление старой версии apk: ошибка"
-          return 1
+          return
         fi
       else
         log_error "[${screen_type}] [${app_id}] Установленная версия apk (${installed_version_name} (${installed_version_code})) больше локальной (${app_version_name} (${app_version_code})), пропускаем установку"
-        return 1
+        return
       fi
     fi
   fi
@@ -533,7 +533,7 @@ function install_apk() {
 
   if ! run_adb install -r -g --user "${user_id}" "${app_filename}"; then
     log_error "[${screen_type}] [$app_id] Установка: ошибка"
-    return 1
+    return
   fi
 
   # Check APPOPS_xxx
@@ -550,7 +550,7 @@ function install_apk() {
 
     if ! run_adb shell appops set --user "${user_id}" "${app_id}" "${opt}" allow; then
       log_error "[${screen_type}] [$app_id] Выдача разрешения ${opt}: ошибка"
-      return 1
+      return
     fi
   done
 }
@@ -565,7 +565,7 @@ function install_carmodapps_app() {
 
   if [ -z "${app_filename}" ]; then
     log_error "[${screen_type}] [$app_id] Нет файла для установки"
-    return 1
+    return
   fi
 
   install_apk "${screen_type}" "${user_id}" "${app_filename}"
@@ -770,7 +770,7 @@ function delete_for_user() {
 
   if [ -z "$non_system_apps" ]; then
     log_info "[${screen_type}] Нет приложений для удаления"
-    return 0
+    return
   fi
 
   log_info "[${screen_type}] Удаление всех приложений, кроме системных..."
@@ -780,7 +780,7 @@ function delete_for_user() {
 
     if ! run_adb uninstall --user "${user_id}" "${app_id}"; then
       log_error "[${screen_type}] Удаление ${app_id}: ошибка"
-      return 1
+      return
     fi
   done
 }
@@ -843,7 +843,7 @@ function do_update() {
 
       if ! curl -s -o "${app_local_filename}" "${app_url}"; then
         log_error "[${app_id}] Загрузка: ошибка"
-        return 1
+        continue
       fi
     fi
 
