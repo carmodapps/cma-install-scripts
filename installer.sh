@@ -317,6 +317,21 @@ function tweak_disable_psglauncher() {
   run_adb shell pm clear --user "${user_id}" com.lixiang.psglauncher
 }
 
+function tweak_ime_swiftkey() {
+  local screen_type=$1
+  local user_id=$2
+
+  run_adb shell ime disable --user "${user_id}" com.baidu.input/.ImeService &&
+    run_adb shell ime disable --user "$user_id" com.android.inputmethod.latin/.LatinIME &&
+    run_adb shell ime enable --user "${user_id}" com.touchtype.swiftkey/com.touchtype.KeyboardService &&
+    run_adb shell ime set --user "${user_id}" com.touchtype.swiftkey/com.touchtype.KeyboardService
+
+  if [ $? -ne 0 ]; then
+    log_error "[${screen_type}] Настройка SwiftKey: ошибка"
+    return 1
+  fi
+}
+
 #################################################################
 
 # Return: app_id"\t"version_code"\t"version_name
@@ -445,21 +460,6 @@ function find_app_first_file() {
   echo "${app_file}"
 }
 
-function post_install_app_swiftkey() {
-  local screen_type=$1
-  local user_id=$2
-
-  run_adb shell ime disable --user "${user_id}" com.baidu.input/.ImeService &&
-    run_adb shell ime disable --user "$user_id" com.android.inputmethod.latin/.LatinIME &&
-    run_adb shell ime enable --user "${user_id}" com.touchtype.swiftkey/com.touchtype.KeyboardService &&
-    run_adb shell ime set --user "${user_id}" com.touchtype.swiftkey/com.touchtype.KeyboardService
-
-  if [ $? -ne 0 ]; then
-    log_error "[${screen_type}] Настройка SwiftKey: ошибка"
-    return 1
-  fi
-}
-
 function install_apk() {
   local screen_type=$1
   local user_id=$2
@@ -553,13 +553,6 @@ function install_apk() {
       return 1
     fi
   done
-
-  if [ "${app_id}" == "com.touchtype.swiftkey" ]; then
-    if ! post_install_app_swiftkey "${screen_type}" "${user_id}"; then
-      return 1
-    fi
-  fi
-
 }
 
 function install_carmodapps_app() {
@@ -634,6 +627,9 @@ function install_front() {
 
     # Install custom packages
     install_custom_packages "${screen_type}" "${user_id}"
+
+    # Run at the end, because swiftkey is installed, but may be not available
+    tweak_ime_swiftkey "${SCREEN_TYPE_REAR}" "${user_id}"
   done
 }
 
@@ -651,6 +647,9 @@ function install_rear() {
 
   # Install custom packages
   install_custom_packages "${SCREEN_TYPE_REAR}" "${user_id}"
+
+  # Run at the end, because swiftkey is installed, but may be not available
+  tweak_ime_swiftkey "${SCREEN_TYPE_REAR}" "${user_id}"
 }
 
 function check_all_apps_exists() {
