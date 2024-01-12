@@ -786,7 +786,7 @@ function delete_for_user() {
   local user_id=$2
   local non_system_apps
 
-  non_system_apps=$(run_adb shell pm list packages --user "${user_id}" -3 | cut -d':' -f2 | tr -d '\r' | tr '\n' ' ')
+  non_system_apps=$(run_adb shell pm list packages --user "${user_id}" -3 | cut -d':' -f2)
 
   if [ -z "$non_system_apps" ]; then
     log_info "[${screen_type}] Нет приложений для удаления"
