@@ -339,7 +339,7 @@ function tweak_change_locale() {
 
   log_info "[${screen_type}] Установка локали ${locale}..."
 
-  if ! shell am start --user "${user_id}" -n "com.carmodapps.carstore/.ChangeSystemLocaleActivity" --es locale "${locale}"; then
+  if ! run_adb shell am start --user "${user_id}" -n "com.carmodapps.carstore/.ChangeSystemLocaleActivity" --es locale "${locale}"; then
     log_error "[${screen_type}] Установка локали ${locale}: ошибка"
     return 1
   fi
