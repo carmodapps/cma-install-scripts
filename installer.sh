@@ -174,22 +174,27 @@ function fn_unique_str_list() {
 #################################################################
 # Run commands
 
-function run_adb() {
-  log_verbose "adb $*"
+function run_cmd() {
+  local cmd=$1
+  shift
 
-  if ! "$ADB" "$@"; then
-    log_error "$ADB $*"
-    exit 1
+  local cmd_basename
+  cmd_basename=$(basename "${cmd}")
+
+  log_verbose "${cmd_basename} $*"
+
+  if ! "${cmd}" "$@"; then
+    log_error "${cmd_basename} $*"
+    return 1
   fi
 }
 
-function run_aapt() {
-  log_verbose "aapt $*"
+function run_adb() {
+  run_cmd "${ADB}" "$@"
+}
 
-  if ! "$AAPT" "$@"; then
-    log_error "$AAPT $*"
-    exit 1
-  fi
+function run_aapt() {
+  run_cmd "${AAPT}" "$@"
 }
 
 #################################################################
