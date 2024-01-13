@@ -49,6 +49,11 @@ PERMISSIONS_APPOPS=(
 )
 
 #################################################################
+# Настройки активных твиков (можно отключить через user_settings.sh)
+
+TWEAK_DISABLE_LAUNCHER=true
+
+#################################################################
 # System vars
 
 ADB="adb"
@@ -77,7 +82,6 @@ PACKAGES_CUSTOM_SCREEN_TYPE_REAR_DIR="${PACKAGES_DIR}/custom/rear"
 VERBOSE=false
 
 FORCE_INSTALL=false
-DISABLE_LAUNCHER=true
 
 #################################################################
 # CPU/Screen types
@@ -636,7 +640,7 @@ function install_front() {
       screen_type="${SCREEN_TYPE_COPILOT}"
       user_apps=("${APPS_SCREEN_TYPE_COPILOT[@]}")
 
-      if ${DISABLE_LAUNCHER}; then
+      if ${TWEAK_DISABLE_LAUNCHER}; then
         tweak_disable_psglauncher "${screen_type}" "${FRONT_MAIN_USER_ID}"
       fi
     fi
@@ -663,7 +667,7 @@ function install_rear() {
   local apps=("${APPS_ALL_SCREENS[@]}" "${APPS_SCREEN_TYPE_REAR[@]}")
   local screen_type="${SCREEN_TYPE_REAR}"
 
-  if ${DISABLE_LAUNCHER}; then
+  if ${TWEAK_DISABLE_LAUNCHER}; then
     tweak_disable_psglauncher "${screen_type}" "${user_id}"
   fi
 
