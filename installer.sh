@@ -51,7 +51,11 @@ PERMISSIONS_APPOPS=(
 #################################################################
 # Настройки активных твиков (можно отключить через user_settings.sh)
 
-TWEAK_DISABLE_LAUNCHER=true
+TWEAK_SET_TIMEZONE=true
+TWEAK_SET_NIGHT_MODE=true
+TWEAK_DISABLE_PSGLAUNCHER=true
+TWEAK_IME_SWIFTKEY=true
+TWEAK_CHANGE_LOCALE=true
 
 #################################################################
 # System vars
@@ -291,6 +295,11 @@ function tweak_set_timezone() {
   local timezone
   local origin
 
+  if ! ${TWEAK_SET_TIMEZONE}; then
+    log_verbose "Установка часового пояса отключена"
+    return 0
+  fi
+
   # if HOST_TIMEZONE is set, use it
   if [ -n "${HOST_TIMEZONE}" ]; then
     timezone="${HOST_TIMEZONE}"
@@ -311,6 +320,11 @@ function tweak_set_timezone() {
 function tweak_set_night_mode() {
   log_info "Установка ночного режима..."
 
+  if ! ${TWEAK_SET_NIGHT_MODE}; then
+    log_verbose "Установка ночного режима отключена"
+    return 0
+  fi
+
   if ! run_adb shell cmd uimode night yes; then
     log_error "Установка ночного режима: ошибка"
     return 1
@@ -321,6 +335,11 @@ function tweak_disable_psglauncher() {
   local screen_type=$1
   local user_id=$2
 
+  if ! ${TWEAK_DISABLE_PSGLAUNCHER}; then
+    log_verbose "[${screen_type}] Отключение PSGLauncher отключено"
+    return 0
+  fi
+
   log_info "[${screen_type}] Отключение PSGLauncher"
 
   run_adb shell pm disable-user --user "${user_id}" com.lixiang.psglauncher
@@ -330,6 +349,11 @@ function tweak_disable_psglauncher() {
 function tweak_ime_swiftkey() {
   local screen_type=$1
   local user_id=$2
+
+  if ! ${TWEAK_IME_SWIFTKEY}; then
+    log_verbose "[${screen_type}] Настройка SwiftKey отключена"
+    return 0
+  fi
 
   run_adb shell ime disable --user "${user_id}" com.baidu.input/.ImeService &&
     run_adb shell ime disable --user "$user_id" com.android.inputmethod.latin/.LatinIME &&
@@ -346,6 +370,11 @@ function tweak_change_locale() {
   local screen_type=$1
   local user_id=$2
   local locale="en_US"
+
+  if ! ${TWEAK_CHANGE_LOCALE}; then
+    log_verbose "[${screen_type}] Установка локали отключена"
+    return 0
+  fi
 
   log_info "[${screen_type}] Установка локали ${locale}..."
 
@@ -640,9 +669,7 @@ function install_front() {
       screen_type="${SCREEN_TYPE_COPILOT}"
       user_apps=("${APPS_SCREEN_TYPE_COPILOT[@]}")
 
-      if ${TWEAK_DISABLE_LAUNCHER}; then
-        tweak_disable_psglauncher "${screen_type}" "${FRONT_MAIN_USER_ID}"
-      fi
+      tweak_disable_psglauncher "${screen_type}" "${FRONT_MAIN_USER_ID}"
     fi
 
     # Install all apps
@@ -667,9 +694,7 @@ function install_rear() {
   local apps=("${APPS_ALL_SCREENS[@]}" "${APPS_SCREEN_TYPE_REAR[@]}")
   local screen_type="${SCREEN_TYPE_REAR}"
 
-  if ${TWEAK_DISABLE_LAUNCHER}; then
-    tweak_disable_psglauncher "${screen_type}" "${user_id}"
-  fi
+  tweak_disable_psglauncher "${screen_type}" "${user_id}"
 
   # Install all apps
   local app_id
