@@ -315,8 +315,7 @@ function adb_get_vin() {
   echo "${vin}"
 }
 
-# Get connected devices info in the next format:
-#   <serial>\t<cpu_type>
+# Get connected devices serials
 function adb_get_connected_devices() {
   local devices_serials
   devices_serials=$(run_adb devices -l | awk 'NR>1 && $2=="device" {print $1}')
@@ -327,23 +326,11 @@ function adb_get_connected_devices() {
   else
     local serial
     for serial in ${devices_serials}; do
-      local product_type
-      local cpu_type
+      log_verbose "Найдено устройство: serial: ${serial}"
 
-      ADB_CURRENT_SERIAL="${serial}"
-
-      product_type=$(adb_get_product_type)
-      cpu_type=$(adb_get_cpu_type)
-      if [ -z "${cpu_type}" ]; then
-        log_error "Неизвестный тип CPU: ${product_type}"
-        continue
-      fi
-
-      log_verbose "Найдено устройство: ${cpu_type} (${serial})"
-
-      printf "%s\t%s\n" "${serial}" "${cpu_type}"
+      echo "$serial"
     done
-    ADB_CURRENT_SERIAL=""
+
   fi
 }
 
@@ -971,28 +958,22 @@ function wait_for_devices() {
   log_warn "!!! Подтвердите подключение на мониторах автомобиля !!!!"
 
   while true; do
-    local devices_info
-    devices_info=$(adb_get_connected_devices)
+    local devices_serials
+    devices_serials=$(adb_get_connected_devices)
 
     # if empty
-    if [ -z "${devices_info}" ]; then
+    if [ -z "${devices_serials}" ]; then
       log_verbose "Устройств не обнаружено, повтор через 1 секунду..."
       sleep 1
     else
-      local devices_info_array=()
-
-      local device_info
-      while IFS= read -r -d '' device_info; do
-        devices_info_array+=("${device_info}")
-      done < <(printf "%s\0" "${devices_info}")
-
       log_info "============================================================"
-      for device_info in "${devices_info_array[@]}"; do
-        local serial
+      local serial
+      for serial in ${devices_serials}; do
         local cpu_type
-        serial=$(echo "${device_info}" | cut -f1)
-        cpu_type=$(echo "${device_info}" | cut -f2)
 
+        ADB_CURRENT_SERIAL="${serial}"
+
+        cpu_type=$(adb_get_cpu_type)
         log_info "Найдено устройство: ${cpu_type} (${serial})"
       done
       log_info "============================================================"
@@ -1005,25 +986,18 @@ function wait_for_devices() {
 function exec_on_all_devices() {
   local cmd=$1
   shift
-  local devices_info
-  local devices_info_array=()
+  local devices_serials
 
-  devices_info=$(adb_get_connected_devices)
-  if [ -z "${devices_info}" ]; then
+  devices_serials=$(adb_get_connected_devices)
+  if [ -z "${devices_serials}" ]; then
     log_error "Устройств не обнаружено"
     exit 1
   fi
 
-  local device_info
-  while IFS= read -r -d '' device_info; do
-    devices_info_array+=("${device_info}")
-  done < <(printf "%s\0" "${devices_info}")
-
-  for device_info in "${devices_info_array[@]}"; do
-    local serial
+  local serial
+  for serial in ${devices_serials}; do
     local cpu_type
-    serial=$(echo "${device_info}" | cut -f1)
-    cpu_type=$(echo "${device_info}" | cut -f2)
+    cpu_type=$(adb_get_cpu_type)
 
     log_verbose "${cmd} ${serial} ${cpu_type}"
 
@@ -1032,7 +1006,6 @@ function exec_on_all_devices() {
       log_error "${cmd} ${serial} ${cpu_type}"
       return 1
     fi
-    ADB_CURRENT_SERIAL=""
   done
 }
 
