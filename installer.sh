@@ -86,6 +86,7 @@ PACKAGES_CUSTOM_SCREEN_TYPE_REAR_DIR="${PACKAGES_DIR}/custom/rear"
 VERBOSE=false
 
 FORCE_INSTALL=false
+DELETE_BEFORE_INSTALL=false
 
 #################################################################
 # CPU/Screen types
@@ -1059,6 +1060,7 @@ function usage() {
   -h, --help: Показать это сообщение
   -v, --verbose: Выводить подробную информацию
   -f, --force: Принудительно установить приложения, даже если они уже установлены
+  -d, Выполнить удаление перед установкой (При запуске без указания команды)
 
 Для добавления своих приложений положите apk в папки:
 
@@ -1092,6 +1094,9 @@ function main() {
     -f | --force)
       FORCE_INSTALL=true
       ;;
+    -d)
+      DELETE_BEFORE_INSTALL=true
+      ;;
     vin | install | update | delete)
       cmd="$1"
       ;;
@@ -1109,6 +1114,9 @@ function main() {
     exec_on_all_devices do_display_vin
   elif [ "${cmd}" == "install" ]; then
     wait_for_devices
+    if ${DELETE_BEFORE_INSTALL}; then
+      exec_on_all_devices do_delete
+    fi
     exec_on_all_devices do_install
     exec_on_all_devices do_display_vin
   elif [ "${cmd}" == "update" ]; then
@@ -1121,6 +1129,9 @@ function main() {
     do_check_self_updates
     do_update
     wait_for_devices
+    if ${DELETE_BEFORE_INSTALL}; then
+      exec_on_all_devices do_delete
+    fi
     exec_on_all_devices do_install
     exec_on_all_devices do_display_vin
     exit 1
