@@ -197,8 +197,13 @@ function run_cmd() {
   fi
 }
 
+ADB_CURRENT_SERIAL=""
 function run_adb() {
-  run_cmd "${ADB}" "$@"
+  if [ -z "${ADB_CURRENT_SERIAL}" ]; then
+    run_cmd "${ADB}" "$@"
+  else
+    run_cmd "${ADB}" -s "${ADB_CURRENT_SERIAL}" "$@"
+  fi
 }
 
 function run_aapt() {
@@ -220,7 +225,7 @@ function get_cpu_type() {
     ;;
   *)
     log_error "Неизвестный тип CPU: ${product_type}"
-    exit 1
+    return 1
     ;;
   esac
 }
@@ -251,20 +256,6 @@ function get_screen_type() {
   fi
 }
 
-function get_vin() {
-  local cpu_type=$1
-
-  local vin
-  vin=$(run_adb shell getprop persist.sys.vehicle.vin)
-
-  if [ -z "${vin}" ]; then
-    log_error "VIN не найден"
-    exit 1
-  fi
-
-  echo "${vin}"
-}
-
 function get_custom_packages_dir() {
   local screen_type=$1
   local dir
@@ -286,6 +277,73 @@ function get_custom_packages_dir() {
   esac
 
   echo "${dir}"
+}
+
+#################################################################
+# ADB helpers
+function adb_get_product_type() {
+  local product_type
+  product_type=$(run_adb shell getprop ro.build.product)
+
+  if [ -z "${product_type}" ]; then
+    log_error "Не удалось считать ro.build.product"
+    return 1
+  fi
+
+  log_verbose "ro.build.product: ${product_type}"
+
+  echo "${product_type}"
+}
+
+function adb_get_cpu_type() {
+  local product_type
+  product_type=$(adb_get_product_type)
+
+  get_cpu_type "${product_type}"
+}
+
+function adb_get_vin() {
+  local vin
+  vin=$(run_adb shell getprop persist.sys.vehicle.vin)
+
+  if [ -z "${vin}" ]; then
+    log_error "VIN не найден"
+    exit 1
+  fi
+
+  echo "${vin}"
+}
+
+# Get connected devices info in the next format:
+#   <serial>\t<cpu_type>
+function adb_get_connected_devices() {
+  local devices_serials
+  devices_serials=$(run_adb devices -l | awk 'NR>1 && $2=="device" {print $1}')
+
+  # if empty
+  if [ -z "${devices_serials}" ]; then
+    log_verbose "Устройств не обнаружено"
+  else
+    local serial
+    for serial in ${devices_serials}; do
+      local product_type
+      local cpu_type
+
+      ADB_CURRENT_SERIAL="${serial}"
+
+      product_type=$(adb_get_product_type)
+      cpu_type=$(adb_get_cpu_type)
+      if [ -z "${cpu_type}" ]; then
+        log_error "Неизвестный тип CPU: ${product_type}"
+        continue
+      fi
+
+      log_verbose "Найдено устройство: ${cpu_type} (${serial})"
+
+      printf "%s\t%s\n" "${serial}" "${cpu_type}"
+    done
+    ADB_CURRENT_SERIAL=""
+  fi
 }
 
 #################################################################
@@ -744,9 +802,9 @@ function check_all_apps_exists() {
   done
 
   if [ ${exit_code} -ne 0 ]; then
-    log_error "############################################################"
+    log_error "============================================================"
     log_error " Ошибка при проверке приложений"
-    log_error "############################################################"
+    log_error "============================================================"
   fi
 
   if ${error_missing_apps}; then
@@ -761,38 +819,16 @@ function check_all_apps_exists() {
   return ${exit_code}
 }
 
-function wait_for_device() {
-  local product_type
-  local cpu_type
-  local vin
-
-  log_info "Ожидание подключения устройства..."
-  log_warn "!!! Подтвердите подключение на мониторе автомобиля !!!!"
-
-  if ! run_adb wait-for-device; then
-    log_error "Устройство не найдено"
-    exit 1
-  fi
-
-  product_type=$(run_adb shell getprop ro.build.product)
-  cpu_type=$(get_cpu_type "${product_type}")
-  vin=$(get_vin "${cpu_type}")
-
-  log_info "Устройство найдено: ${cpu_type} (VIN: ${vin})"
-
-  echo "${cpu_type}"
-}
-
 function do_display_vin() {
   local cpu_type
   local vin
 
-  cpu_type=$(wait_for_device)
-  vin=$(get_vin "${cpu_type}")
+  cpu_type=$(adb_get_cpu_type)
+  vin=$(adb_get_vin)
 
-  log_info "############################################################"
-  log_info "VIN: ${vin}"
-  log_info "############################################################"
+  log_info "============================================================"
+  log_info "VIN: ${vin} (${cpu_type})"
+  log_info "============================================================"
 }
 
 function do_install() {
@@ -802,7 +838,7 @@ function do_install() {
     exit 1
   fi
 
-  cpu_type=$(wait_for_device)
+  cpu_type=$(adb_get_cpu_type)
 
   case "${cpu_type}" in
   "${CPU_TYPE_FRONT}")
@@ -815,7 +851,10 @@ function do_install() {
     tweak_set_night_mode
     install_rear
     ;;
-    # Default will be handled in wait_for_device()
+  default)
+    log_error "Неизвестный тип CPU: ${cpu_type}"
+    exit 1
+    ;;
   esac
 
 }
@@ -847,7 +886,7 @@ function delete_for_user() {
 function do_delete() {
   local cpu_type
 
-  cpu_type=$(wait_for_device)
+  cpu_type=$(adb_get_cpu_type)
 
   case "${cpu_type}" in
   "${CPU_TYPE_FRONT}")
@@ -857,7 +896,10 @@ function do_delete() {
   "${CPU_TYPE_REAR}")
     delete_for_user "${SCREEN_TYPE_REAR}" "${REAR_USER_ID}"
     ;;
-    # Default will be handled in wait_for_device()
+  default)
+    log_error "Неизвестный тип CPU: ${cpu_type}"
+    exit 1
+    ;;
   esac
 }
 
@@ -918,6 +960,79 @@ function do_update() {
     done < <(find_app_files "$app_id")
   done
 
+}
+
+# Wait for device and return line for each device:
+# <serial>\t<cpu_type>
+function wait_for_devices() {
+
+  log_info "Ожидание подключения устройств..."
+  log_warn "!!! Подтвердите подключение на мониторах автомобиля !!!!"
+
+  while true; do
+    local devices_info
+    devices_info=$(adb_get_connected_devices)
+
+    # if empty
+    if [ -z "${devices_info}" ]; then
+      log_verbose "Устройств не обнаружено, повтор через 1 секунду..."
+      sleep 1
+    else
+      local devices_info_array=()
+
+      local device_info
+      while IFS= read -r -d '' device_info; do
+        devices_info_array+=("${device_info}")
+      done < <(printf "%s\0" "${devices_info}")
+
+      log_info "============================================================"
+      for device_info in "${devices_info_array[@]}"; do
+        local serial
+        local cpu_type
+        serial=$(echo "${device_info}" | cut -f1)
+        cpu_type=$(echo "${device_info}" | cut -f2)
+
+        log_info "Найдено устройство: ${cpu_type} (${serial})"
+      done
+      log_info "============================================================"
+
+      break
+    fi
+  done
+}
+
+function exec_on_all_devices() {
+  local cmd=$1
+  shift
+  local devices_info
+  local devices_info_array=()
+
+  devices_info=$(adb_get_connected_devices)
+  if [ -z "${devices_info}" ]; then
+    log_error "Устройств не обнаружено"
+    exit 1
+  fi
+
+  local device_info
+  while IFS= read -r -d '' device_info; do
+    devices_info_array+=("${device_info}")
+  done < <(printf "%s\0" "${devices_info}")
+
+  for device_info in "${devices_info_array[@]}"; do
+    local serial
+    local cpu_type
+    serial=$(echo "${device_info}" | cut -f1)
+    cpu_type=$(echo "${device_info}" | cut -f2)
+
+    log_verbose "${cmd} ${serial} ${cpu_type}"
+
+    ADB_CURRENT_SERIAL="${serial}"
+    if ! "${cmd}" "${cpu_type}" "$@"; then
+      log_error "${cmd} ${serial} ${cpu_type}"
+      return 1
+    fi
+    ADB_CURRENT_SERIAL=""
+  done
 }
 
 #################################################################
@@ -990,19 +1105,24 @@ function main() {
   done
 
   if [ "${cmd}" == "vin" ]; then
-    do_display_vin
+    wait_for_devices
+    exec_on_all_devices do_display_vin
   elif [ "${cmd}" == "install" ]; then
-    do_install
-    do_display_vin
+    wait_for_devices
+    exec_on_all_devices do_install
+    exec_on_all_devices do_display_vin
   elif [ "${cmd}" == "update" ]; then
     do_check_self_updates
     do_update
   elif [ "${cmd}" == "delete" ]; then
-    do_delete
+    wait_for_devices
+    exec_on_all_devices do_delete
   else
     do_check_self_updates
     do_update
-    do_install
+    wait_for_devices
+    exec_on_all_devices do_install
+    exec_on_all_devices do_display_vin
     exit 1
   fi
 }
