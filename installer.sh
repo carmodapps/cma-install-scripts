@@ -1014,6 +1014,21 @@ function do_clear() {
   esac
 }
 
+# Check if network connection is available
+function has_network_connection() {
+  local ping_host="yandex.ru"
+  local ping_count=1
+  local ping_timeout=1
+
+  if ping -c "${ping_count}" -W "${ping_timeout}" "${ping_host}" >/dev/null 2>&1; then
+    log_verbose "Сетевое соединение доступно"
+    return 0
+  else
+    log_verbose "Сетевое соединение недоступно"
+    return 1
+  fi
+}
+
 function do_check_self_updates() {
   local server_version_url="https://raw.githubusercontent.com/carmodapps/liauto-install-scripts/master/VERSION"
 
@@ -1265,8 +1280,13 @@ function main() {
     exec_on_all_devices do_clear
     ;;
   *)
-    do_check_self_updates
-    do_update
+    if has_network_connection; then
+      do_check_self_updates
+      do_update
+    else
+      log_warn "Сетевое соединение недоступно, пропускаем обновление скрипта и приложений"
+    fi
+
     wait_for_devices
 
     if ${OPT_DELETE_BEFORE_INSTALL}; then
