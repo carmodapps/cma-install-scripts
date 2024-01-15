@@ -83,10 +83,9 @@ PACKAGES_CUSTOM_SCREEN_TYPE_DRIVER_DIR="${PACKAGES_DIR}/custom/driver"
 PACKAGES_CUSTOM_SCREEN_TYPE_COPILOT_DIR="${PACKAGES_DIR}/custom/copilot"
 PACKAGES_CUSTOM_SCREEN_TYPE_REAR_DIR="${PACKAGES_DIR}/custom/rear"
 
-VERBOSE=false
-
-FORCE_INSTALL=false
-DELETE_BEFORE_INSTALL=false
+OPT_VERBOSE=false
+OPT_FORCE_INSTALL=false
+OPT_DELETE_BEFORE_INSTALL=false
 OPT_CLEAR_BEFORE_INSTALL=false
 
 #################################################################
@@ -168,7 +167,7 @@ function log_error() {
 }
 
 function log_verbose() {
-  if ${VERBOSE}; then
+  if ${OPT_VERBOSE}; then
     echo -e "\033[37m${LOG_PREFIX}$1\033[0m" >&2
   fi
 }
@@ -667,7 +666,7 @@ function install_apk() {
 
     # if version code and version name are the same
     if [ "${app_version_code}" -eq "${installed_version_code}" ] && [ "${app_version_name}" == "${installed_version_name}" ]; then
-      if ${FORCE_INSTALL}; then
+      if ${OPT_FORCE_INSTALL}; then
         log_info "[${screen_type}] [${app_id}] Установленная версия apk совпадает с локальной, но установка принудительно включена, устанавливаем: ${app_version_name} (${app_version_code})"
       else
         log_info "[${screen_type}] [${app_id}] Установленная версия apk совпадает с локальной, пропускаем установку: ${app_version_name} (${app_version_code})"
@@ -677,7 +676,7 @@ function install_apk() {
 
     # if installed version code is greater than local version code
     if [ "${installed_version_code}" -gt "${app_version_code}" ]; then
-      if ${FORCE_INSTALL}; then
+      if ${OPT_FORCE_INSTALL}; then
         log_warn "[${screen_type}] [${app_id}] Установленная версия apk (${installed_version_name} (${installed_version_code})) больше локальной (${app_version_name} (${app_version_code})), принудительно устанавливаем"
 
         log_info "[${screen_type}] [${app_id}] Удаление старой версии apk..."
@@ -1185,13 +1184,13 @@ function main() {
       exit 0
       ;;
     -v | --verbose)
-      VERBOSE=true
+      OPT_VERBOSE=true
       ;;
     -f | --force)
-      FORCE_INSTALL=true
+      OPT_FORCE_INSTALL=true
       ;;
     -d)
-      DELETE_BEFORE_INSTALL=true
+      OPT_DELETE_BEFORE_INSTALL=true
       ;;
     -c)
       OPT_CLEAR_BEFORE_INSTALL=true
@@ -1215,7 +1214,7 @@ function main() {
     ;;
   install)
     wait_for_devices
-    if ${DELETE_BEFORE_INSTALL}; then
+    if ${OPT_DELETE_BEFORE_INSTALL}; then
       exec_on_all_devices do_delete
     fi
     exec_on_all_devices do_install
@@ -1237,7 +1236,7 @@ function main() {
     do_check_self_updates
     do_update
     wait_for_devices
-    if ${DELETE_BEFORE_INSTALL}; then
+    if ${OPT_DELETE_BEFORE_INSTALL}; then
       exec_on_all_devices do_delete
     elif ${OPT_CLEAR_BEFORE_INSTALL}; then
       exec_on_all_devices do_clear
