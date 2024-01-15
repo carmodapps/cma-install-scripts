@@ -154,21 +154,27 @@ fi
 
 LOG_PREFIX="####LiAuto### "
 
+ANSI_GREEN="\033[32m"
+ANSI_YELLOW="\033[33m"
+ANSI_RED="\033[31m"
+ANSI_GRAY="\033[37m"
+ANSI_RESET="\033[0m"
+
 function log_info() {
-  echo -e "\033[32m${LOG_PREFIX}$1\033[0m" >&2
+  echo -e "${ANSI_GREEN}${LOG_PREFIX}$1${ANSI_RESET}" >&2
 }
 
 function log_warn() {
-  echo -e "\033[33m${LOG_PREFIX}[Предупреждение] $1\033[0m" >&2
+  echo -e "${ANSI_YELLOW}${LOG_PREFIX}[Предупреждение] $1${ANSI_RESET}" >&2
 }
 
 function log_error() {
-  echo -e "\033[31m${LOG_PREFIX}[Ошибка] $1\033[0m" >&2
+  echo -e "${ANSI_RED}${LOG_PREFIX}[Ошибка] $1${ANSI_RESET}" >&2
 }
 
 function log_verbose() {
   if ${OPT_VERBOSE}; then
-    echo -e "\033[37m${LOG_PREFIX}$1\033[0m" >&2
+    echo -e "${ANSI_GRAY}${LOG_PREFIX}$1${ANSI_RESET}" >&2
   fi
 }
 
@@ -1073,7 +1079,12 @@ function do_update() {
 function wait_for_devices() {
 
   log_info "Ожидание подключения устройств..."
-  log_warn "!!! Подтвердите подключение на мониторах автомобиля !!!!"
+
+  echo -e -n "${ANSI_YELLOW}"
+  echo "============================================================"
+  echo "!!!   Подтвердите подключение на мониторах автомобиля   !!!!"
+  echo "============================================================"
+  echo -e -n "${ANSI_RESET}"
 
   while true; do
     local devices_serials
