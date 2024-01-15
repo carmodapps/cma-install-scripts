@@ -87,7 +87,7 @@ VERBOSE=false
 
 FORCE_INSTALL=false
 DELETE_BEFORE_INSTALL=false
-OPTION_CLEAR_BEFORE_INSTALL=false
+OPT_CLEAR_BEFORE_INSTALL=false
 
 #################################################################
 # CPU/Screen types
@@ -993,7 +993,7 @@ function do_clear() {
 
   cpu_type=$(adb_get_cpu_type)
 
-  log_info "[${cpu_type}] Удаление сторонних приложений..."
+  log_info "[${cpu_type}] Удаление сторонних приложений кроме CarModApps и пользовательских..."
 
   case "${cpu_type}" in
   "${CPU_TYPE_FRONT}")
@@ -1149,11 +1149,14 @@ function usage() {
   delete: Удалить ВСЕ не системные приложения, включая CarModApps и пользовательские приложения
   clear: Удалить все приложения, кроме CarModApps и пользовательских приложений
 
-Опции:
+ Общие опции:
   -h, --help: Показать это сообщение
   -v, --verbose: Выводить подробную информацию
   -f, --force: Принудительно установить приложения, даже если они уже установлены
-  -d, Выполнить удаление перед установкой (При запуске без указания команды)
+
+Опции при запуске без команды:
+  -d, Выполнить удаление ВСЕХ не системных приложений перед установкой
+  -c, Выполнить очистку всех приложений, кроме CarModApps и пользовательских приложений
 
 Для добавления своих приложений положите apk в папки:
 
@@ -1189,6 +1192,9 @@ function main() {
       ;;
     -d)
       DELETE_BEFORE_INSTALL=true
+      ;;
+    -c)
+      OPT_CLEAR_BEFORE_INSTALL=true
       ;;
     vin | install | update | delete | clear)
       cmd="$1"
@@ -1233,7 +1239,7 @@ function main() {
     wait_for_devices
     if ${DELETE_BEFORE_INSTALL}; then
       exec_on_all_devices do_delete
-    elif ${OPTION_CLEAR_BEFORE_INSTALL}; then
+    elif ${OPT_CLEAR_BEFORE_INSTALL}; then
       exec_on_all_devices do_clear
     fi
     exec_on_all_devices do_install

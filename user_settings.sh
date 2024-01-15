@@ -2,4 +2,4 @@
 
 # shellcheck source=./installer.sh
 
-OPTION_CLEAR_BEFORE_INSTALL=true
+#OPT_CLEAR_BEFORE_INSTALL=true
