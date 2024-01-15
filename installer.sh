@@ -1202,27 +1202,32 @@ function main() {
     shift
   done
 
-  # FIXME: Refactor to case
-  if [ "${cmd}" == "vin" ]; then
+  case "${cmd}" in
+  vin)
     wait_for_devices
     exec_on_all_devices do_display_vin
-  elif [ "${cmd}" == "install" ]; then
+    ;;
+  install)
     wait_for_devices
     if ${DELETE_BEFORE_INSTALL}; then
       exec_on_all_devices do_delete
     fi
     exec_on_all_devices do_install
     exec_on_all_devices do_display_vin
-  elif [ "${cmd}" == "update" ]; then
+    ;;
+  update)
     do_check_self_updates
     do_update
-  elif [ "${cmd}" == "delete" ]; then
+    ;;
+  delete)
     wait_for_devices
     exec_on_all_devices do_delete
-  elif [ "${cmd}" == "clear" ]; then
+    ;;
+  clear)
     wait_for_devices
     exec_on_all_devices do_clear
-  else
+    ;;
+  *)
     do_check_self_updates
     do_update
     wait_for_devices
@@ -1233,8 +1238,9 @@ function main() {
     fi
     exec_on_all_devices do_install
     exec_on_all_devices do_display_vin
-    exit 1
-  fi
+    ;;
+  esac
+
 }
 
 main "$@"
