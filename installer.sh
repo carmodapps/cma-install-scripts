@@ -87,6 +87,7 @@ VERBOSE=false
 
 FORCE_INSTALL=false
 DELETE_BEFORE_INSTALL=false
+OPTION_CLEAR_BEFORE_INSTALL=false
 
 #################################################################
 # CPU/Screen types
@@ -255,6 +256,72 @@ function get_screen_type() {
     log_error "Неизвестный тип CPU: ${cpu_type}, cpu_type: ${cpu_type}"
     exit 1
   fi
+}
+
+# Get only carmodapps apps ids for screen type
+function get_carmodapps_apps() {
+  local screen_type=$1
+
+  case "${screen_type}" in
+  "${SCREEN_TYPE_DRIVER}")
+    echo "${APPS_ALL_SCREENS[*]} ${APPS_SCREEN_TYPE_DRIVER[*]}"
+    ;;
+  "${SCREEN_TYPE_COPILOT}")
+    echo "${APPS_ALL_SCREENS[*]} ${APPS_SCREEN_TYPE_COPILOT[*]}"
+    ;;
+  "${SCREEN_TYPE_REAR}")
+    echo "${APPS_ALL_SCREENS[*]} ${APPS_SCREEN_TYPE_REAR[*]}"
+    ;;
+  *)
+    log_error "[get_carmodapps_apps] Неизвестный тип экрана: ${screen_type}"
+    exit 1
+    ;;
+  esac
+}
+
+# Get custom apps ids for screen type
+function get_custom_screen_apps_ids() {
+  local screen_type=$1
+  local user_id=$2
+  local custom_packages_dir
+  local app_filename
+
+  custom_packages_dir=$(get_custom_packages_dir "${screen_type}")
+
+  log_verbose "[${screen_type}][get_custom_screen_apps_ids] Проверка папки пользовательских приложений: ${custom_packages_dir}"
+
+  # Collect all custom apps
+  local custom_apps_count=0
+  local custom_apps=()
+  while IFS= read -r -d '' app_filename; do
+    custom_apps+=("${app_filename}")
+    custom_apps_count=$((custom_apps_count + 1))
+  done < <(find "${custom_packages_dir}" -name "*.apk" -print0)
+
+  log_verbose "[${screen_type}][get_custom_screen_apps_ids] Найдено пользовательских приложений: ${custom_apps_count}"
+
+  for app_filename in "${custom_apps[@]}"; do
+    local pkginfo_str
+    pkginfo_str=$(get_apk_package_info "${app_filename}")
+    echo "${pkginfo_str}" | cut -f1
+  done
+}
+
+# Get all apps ids for screen type (including custom apps)
+function get_screen_apps_ids() {
+  local screen_type=$1
+  local carmodapps_apps_ids
+  local carmodapps_apps_ids_arr
+  local custom_apps_ids
+  local custom_apps_ids_arr
+
+  custom_apps_ids=$(get_custom_screen_apps_ids "${screen_type}")
+  custom_apps_ids_arr=("${custom_apps_ids}")
+
+  carmodapps_apps_ids=$(get_carmodapps_apps "${screen_type}")
+  carmodapps_apps_ids_arr=("${carmodapps_apps_ids}")
+
+  echo "${carmodapps_apps_ids_arr[*]} ${custom_apps_ids_arr[*]}"
 }
 
 function get_custom_packages_dir() {
@@ -891,6 +958,58 @@ function do_delete() {
   esac
 }
 
+function clear_for_screen() {
+  local screen_type=$1
+  local user_id=$2
+  local non_system_apps
+  local keep_apps
+  local app_id
+
+  non_system_apps=$(run_adb shell pm list packages --user "${user_id}" -3 | cut -d':' -f2)
+  keep_apps=$(get_screen_apps_ids "${screen_type}")
+
+  for app_id in ${keep_apps}; do
+    log_verbose "[${screen_type}] Keep app: ${app_id}"
+  done
+
+  # For each app in keep_apps check if it is in not_clear_apps
+  # If not, delete it
+  for app_id in ${non_system_apps}; do
+    if ! echo "${keep_apps}" | grep -q "${app_id}"; then
+      log_warn "[${screen_type}] Удаление ${app_id}..."
+
+      if ! run_adb uninstall --user "${user_id}" "${app_id}"; then
+        log_error "[${screen_type}] Удаление ${app_id}: ошибка"
+        return 1
+      fi
+    else
+      log_verbose "[${screen_type}] Удаление не требуется для ${app_id}"
+    fi
+  done
+}
+
+function do_clear() {
+  local cpu_type
+
+  cpu_type=$(adb_get_cpu_type)
+
+  log_info "[${cpu_type}] Удаление сторонних приложений..."
+
+  case "${cpu_type}" in
+  "${CPU_TYPE_FRONT}")
+    clear_for_screen "${SCREEN_TYPE_DRIVER}" "${FRONT_MAIN_USER_ID}"
+    clear_for_screen "${SCREEN_TYPE_COPILOT}" "${FRONT_COPILOT_USER_ID}"
+    ;;
+  "${CPU_TYPE_REAR}")
+    clear_for_screen "${SCREEN_TYPE_REAR}" "${REAR_USER_ID}"
+    ;;
+  default)
+    log_error "[do_clear] Неизвестный тип CPU: ${cpu_type}"
+    exit 1
+    ;;
+  esac
+}
+
 function do_check_self_updates() {
   log_verbose "Проверка обновлений скрипта..."
 
@@ -1027,7 +1146,8 @@ function usage() {
   vin: Отобразить VIN
   install: Запустить автоматическую установку приложений
   update: Загрузить приложения с сервера CarModApps
-  delete: Удалить все не системные приложения
+  delete: Удалить ВСЕ не системные приложения, включая CarModApps и пользовательские приложения
+  clear: Удалить все приложения, кроме CarModApps и пользовательских приложений
 
 Опции:
   -h, --help: Показать это сообщение
@@ -1070,7 +1190,7 @@ function main() {
     -d)
       DELETE_BEFORE_INSTALL=true
       ;;
-    vin | install | update | delete)
+    vin | install | update | delete | clear)
       cmd="$1"
       ;;
     *)
@@ -1082,6 +1202,7 @@ function main() {
     shift
   done
 
+  # FIXME: Refactor to case
   if [ "${cmd}" == "vin" ]; then
     wait_for_devices
     exec_on_all_devices do_display_vin
@@ -1098,12 +1219,17 @@ function main() {
   elif [ "${cmd}" == "delete" ]; then
     wait_for_devices
     exec_on_all_devices do_delete
+  elif [ "${cmd}" == "clear" ]; then
+    wait_for_devices
+    exec_on_all_devices do_clear
   else
     do_check_self_updates
     do_update
     wait_for_devices
     if ${DELETE_BEFORE_INSTALL}; then
       exec_on_all_devices do_delete
+    elif ${OPTION_CLEAR_BEFORE_INSTALL}; then
+      exec_on_all_devices do_clear
     fi
     exec_on_all_devices do_install
     exec_on_all_devices do_display_vin
