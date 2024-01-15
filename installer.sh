@@ -577,9 +577,9 @@ function install_apk() {
   local app_id
   local app_version_code
   local app_version_name
-  app_id=$(echo "${pkginfo_str}" | head -n 1 | cut -f1)
-  app_version_code=$(echo "${pkginfo_str}" | head -n 1 | cut -f2)
-  app_version_name=$(echo "${pkginfo_str}" | head -n 1 | cut -f3)
+  app_id=$(echo "${pkginfo_str}" | cut -f1)
+  app_version_code=$(echo "${pkginfo_str}" | cut -f2)
+  app_version_name=$(echo "${pkginfo_str}" | cut -f3)
 
   log_verbose "[${screen_type}] [${app_id}] Локальная версия apk: ${app_version_name} (${app_version_code})"
 
@@ -593,8 +593,8 @@ function install_apk() {
   if [ -n "${package_info_output}" ]; then
     local installed_version_code
     local installed_version_name
-    installed_version_code=$(echo "${package_info_output}" | head -n 1 | cut -f2)
-    installed_version_name=$(echo "${package_info_output}" | head -n 1 | cut -f3)
+    installed_version_code=$(echo "${package_info_output}" | cut -f2)
+    installed_version_name=$(echo "${package_info_output}" | cut -f3)
 
     log_verbose "[${screen_type}] [${app_id}] Установленная версия apk: ${installed_version_name} (${installed_version_code})"
 
