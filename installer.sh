@@ -1015,7 +1015,33 @@ function do_clear() {
 }
 
 function do_check_self_updates() {
+  local server_version_url="https://raw.githubusercontent.com/carmodapps/liauto-install-scripts/master/VERSION"
+
   log_verbose "Проверка обновлений скрипта..."
+
+  local server_version
+  server_version=$(run_cmd curl -s "${server_version_url}")
+
+  if [ -z "${server_version}" ]; then
+    log_error "Не удалось получить версию скрипта с сервера"
+    return 0
+  fi
+
+  if [ "${server_version}" == "${VERSION}" ]; then
+    log_info "Скрипт обновлен до последней версии (${VERSION})"
+  else
+    echo -e -n "${ANSI_YELLOW}"
+    echo "============================================================"
+    echo " Доступно обновление скрипта!"
+    echo ""
+    echo " Установленная версия: ${VERSION}"
+    echo " Новая версия: ${server_version}"
+    echo ""
+    echo " Скачайте новую версию скрипта по ссылке https://github.com/carmodapps/liauto-install-scripts/archive/master.zip"
+    echo " Или выполните команду \"git pull\" в папке со скриптом, если вы используете git"
+    echo "============================================================"
+    echo -e -n "${ANSI_RESET}"
+  fi
 
   # FIXME: Сделать проверку, сравнение версий,
   #  а также добавить update.sh (может качать с github и запускать?)
