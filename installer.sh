@@ -80,6 +80,7 @@ fi
 
 PACKAGES_DIR="${SCRIPT_DIR}/packages"
 PACKAGES_CMA_DIR="${PACKAGES_DIR}/carmodapps"
+PACKAGES_CMA_INDEX_FILE="${PACKAGES_CMA_DIR}/index.txt"
 PACKAGES_CUSTOM_SCREEN_TYPE_DRIVER_DIR="${PACKAGES_DIR}/custom/driver"
 PACKAGES_CUSTOM_SCREEN_TYPE_COPILOT_DIR="${PACKAGES_DIR}/custom/copilot"
 PACKAGES_CUSTOM_SCREEN_TYPE_REAR_DIR="${PACKAGES_DIR}/custom/rear"
@@ -894,6 +895,10 @@ function do_display_vin() {
 function do_install() {
   local cpu_type
 
+  if ! fill_carmodapps_app_to_screens; then
+    exit 1
+  fi
+
   if ! check_all_apps_exists; then
     exit 1
   fi
@@ -1073,12 +1078,17 @@ function do_update() {
 
   apps_url_list=$(curl -s -G -H "Accept: text/plain" "${api_url}")
 
+  # Clean index file
+  echo -n "" >"${PACKAGES_CMA_INDEX_FILE}"
+
   local app_line
   for app_line in ${apps_url_list}; do
     local app_id
     local app_filename
     local app_url
     local app_local_filename
+    local app_local_filename_basename
+    local app_screens
 
     if [ -z "${app_line}" ]; then
       continue
@@ -1088,8 +1098,11 @@ function do_update() {
     app_id=$(echo "$app_line" | cut -d'|' -f1)
     app_filename=$(echo "$app_line" | cut -d'|' -f2)
     app_url=$(echo "$app_line" | cut -d'|' -f3)
+    app_screens=$(echo "$app_line" | cut -d'|' -f4)
 
     app_local_filename="${PACKAGES_CMA_DIR}/${app_filename}"
+    app_local_filename_basename=$(basename "${app_local_filename}")
+
     if [ -f "${app_local_filename}" ]; then
       log_verbose "[${app_id}] Уже загружен, пропускаем..."
     else
@@ -1100,6 +1113,8 @@ function do_update() {
         return 1
       fi
     fi
+    # Save to index file
+    echo "${app_id}|${app_local_filename_basename}|${app_screens}" >>"${PACKAGES_CMA_INDEX_FILE}"
 
     # Remove old app files
     local old_app_file
