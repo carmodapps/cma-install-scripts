@@ -58,7 +58,6 @@
 
   1. Создайте файл user_settings.sh
   2. Добавьте в него переопределение переменных
-     Пример добавления установки Angry birds из CarModApps на все экраны:
-        APPS_ALL_SCREENS+=("com.rovio.angrybirds")
+  
 EOF
 ```

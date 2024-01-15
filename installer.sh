@@ -10,37 +10,6 @@ DEFAULT_TIMEZONE="Europe/Moscow"
 # В нём можно переопределить переменные
 USER_DEFINED_SETTINGS_OVERRIDE_FILE="user_settings.sh"
 
-APPS_ALL_SCREENS=(
-  # "Системные приложения"
-  "com.carmodapps.carstore"
-  "com.touchtype.swiftkey"
-  "mobi.infolife.uninstaller"
-
-  # Общие приложения для всех экранов
-  "com.apple.android.music"
-  "ru.kinopoisk"
-  "ru.yandex.music"
-)
-
-APPS_SCREEN_TYPE_DRIVER=(
-  # Приложения для экрана водителя
-  "ru.yandex.yandexnavi"
-  "to.chargers"
-  "com.maxxt.pcradio"
-  "air.StrelkaHUDFREE"
-)
-
-APPS_SCREEN_TYPE_COPILOT=(
-  # Приложения для экрана пассажира
-  # (Они будут также установлены на водительский, т.к. пока нет возможности установить только на пассажирский)
-)
-
-APPS_SCREEN_TYPE_REAR=(
-  # Приложения для экрана задних пассажиров
-  "com.rovio.angrybirds"
-  "com.netflix.NGP.TerraNil"
-)
-
 #################################################################
 # Разрешения appops для приложений
 # Они будут выданы автоматически если в манифесте приложения есть соответствующие разрешения
@@ -264,70 +233,78 @@ function get_screen_type() {
   fi
 }
 
-# Get only carmodapps apps ids for screen type
+# Get only carmodapps apps for screen type
 function get_carmodapps_apps() {
   local screen_type=$1
+  local filter
 
   case "${screen_type}" in
   "${SCREEN_TYPE_DRIVER}")
-    echo "${APPS_ALL_SCREENS[*]} ${APPS_SCREEN_TYPE_DRIVER[*]}"
+    filter="driver"
     ;;
   "${SCREEN_TYPE_COPILOT}")
-    echo "${APPS_ALL_SCREENS[*]} ${APPS_SCREEN_TYPE_COPILOT[*]}"
+    filter="copilot"
     ;;
   "${SCREEN_TYPE_REAR}")
-    echo "${APPS_ALL_SCREENS[*]} ${APPS_SCREEN_TYPE_REAR[*]}"
+    filter="rear"
     ;;
   *)
     log_error "[get_carmodapps_apps] Неизвестный тип экрана: ${screen_type}"
     exit 1
     ;;
   esac
+
+  log_verbose "[${screen_type}][get_carmodapps_apps] Получение списка приложений CarModApps..."
+
+  local line
+  while IFS= read -r line; do
+    local app_id
+    local app_filename_basename
+    local app_filename
+    local app_screen_types
+    app_id=$(echo "${line}" | cut -d'|' -f1)
+    app_filename_basename=$(echo "${line}" | cut -d'|' -f2)
+    app_screen_types=$(echo "${line}" | cut -d'|' -f3)
+
+    app_filename="${PACKAGES_CMA_DIR}/${app_filename_basename}"
+
+    # app_screen_types format: driver,copilot,rear (coma-separated list of screen types)
+    if echo "${app_screen_types}" | grep -q "${filter}"; then
+      log_verbose "[${screen_type}][get_carmodapps_apps][${app_id} (${app_screen_types}) - OK]"
+      echo "${app_filename}"
+    else
+      log_verbose "[${screen_type}][get_carmodapps_apps][${app_id} (${app_screen_types}) - SKIP]"
+    fi
+
+  done < <(cat "${PACKAGES_CMA_INDEX_FILE}")
 }
 
 # Get custom apps ids for screen type
-function get_custom_screen_apps_ids() {
+function get_custom_screen_apps() {
   local screen_type=$1
-  local user_id=$2
   local custom_packages_dir
-  local app_filename
 
   custom_packages_dir=$(get_custom_packages_dir "${screen_type}")
 
-  log_verbose "[${screen_type}][get_custom_screen_apps_ids] Проверка папки пользовательских приложений: ${custom_packages_dir}"
+  log_verbose "[${screen_type}][get_custom_screen_apps] Проверка папки пользовательских приложений: ${custom_packages_dir}"
 
   # Collect all custom apps
   local custom_apps_count=0
-  local custom_apps=()
+  local app_filename
   while IFS= read -r -d '' app_filename; do
-    custom_apps+=("${app_filename}")
+    echo "${app_filename}"
+    log_verbose "[${screen_type}][get_custom_screen_apps] Найдено пользовательское приложение: ${app_filename}"
     custom_apps_count=$((custom_apps_count + 1))
   done < <(find "${custom_packages_dir}" -name "*.apk" -print0)
 
-  log_verbose "[${screen_type}][get_custom_screen_apps_ids] Найдено пользовательских приложений: ${custom_apps_count}"
-
-  for app_filename in "${custom_apps[@]}"; do
-    local pkginfo_str
-    pkginfo_str=$(get_apk_package_info "${app_filename}")
-    echo "${pkginfo_str}" | cut -f1
-  done
+  log_verbose "[${screen_type}][get_custom_screen_apps] Найдено пользовательских приложений: ${custom_apps_count}"
 }
 
-# Get all apps ids for screen type (including custom apps)
-function get_screen_apps_ids() {
+function get_all_screen_apps() {
   local screen_type=$1
-  local carmodapps_apps_ids
-  local carmodapps_apps_ids_arr
-  local custom_apps_ids
-  local custom_apps_ids_arr
 
-  custom_apps_ids=$(get_custom_screen_apps_ids "${screen_type}")
-  custom_apps_ids_arr=("${custom_apps_ids}")
-
-  carmodapps_apps_ids=$(get_carmodapps_apps "${screen_type}")
-  carmodapps_apps_ids_arr=("${carmodapps_apps_ids}")
-
-  echo "${carmodapps_apps_ids_arr[*]} ${custom_apps_ids_arr[*]}"
+  get_carmodapps_apps "${screen_type}"
+  get_custom_screen_apps "${screen_type}"
 }
 
 function get_custom_packages_dir() {
@@ -572,7 +549,7 @@ function get_apk_package_info() {
   '
   )
 
-  log_verbose "[$(basename "${file_name}")] aapt_output: ${aapt_output}"
+  #  log_verbose "[$(basename "${file_name}")] aapt_output: ${aapt_output}"
 
   if [ -z "${aapt_output}" ]; then
     log_error "[$(basename "${file_name}")] Ошибка получения информации о приложении"
@@ -726,27 +703,9 @@ function install_apk() {
   done
 }
 
-function install_carmodapps_app() {
-  local screen_type=$1
-  local app_id=$2
-  local user_id=$3
-  local app_filename
-
-  app_filename=$(find_app_first_file "${app_id}")
-
-  if [ -z "${app_filename}" ]; then
-    log_error "[${screen_type}] [$app_id] Нет файла для установки"
-    return 1
-  fi
-
-  install_apk "${screen_type}" "${user_id}" "${app_filename}"
-}
-
 function install_custom_packages() {
   local screen_type=$1
   local user_id=$2
-  local custom_packages_dir
-  local app_filename
 
   custom_packages_dir=$(get_custom_packages_dir "${screen_type}")
 
@@ -755,10 +714,11 @@ function install_custom_packages() {
   # Collect all custom apps
   local custom_apps_count=0
   local custom_apps=()
-  while IFS= read -r -d '' app_filename; do
+  local app_filename
+  while IFS= read -r app_filename; do
     custom_apps+=("${app_filename}")
     custom_apps_count=$((custom_apps_count + 1))
-  done < <(find "${custom_packages_dir}" -name "*.apk" -print0)
+  done < <(get_custom_screen_apps "${screen_type}")
 
   log_verbose "[${screen_type}] Найдено пользовательских приложений: ${custom_apps_count}"
 
@@ -779,23 +739,22 @@ function install_front() {
   local user_id
   for user_id in "${users[@]}"; do
     local screen_type
-    local user_apps=()
 
     if [ "${user_id}" == "${FRONT_MAIN_USER_ID}" ]; then
       screen_type="${SCREEN_TYPE_DRIVER}"
-      user_apps=("${APPS_SCREEN_TYPE_DRIVER[@]}")
     else
       screen_type="${SCREEN_TYPE_COPILOT}"
-      user_apps=("${APPS_SCREEN_TYPE_COPILOT[@]}")
-
-      tweak_disable_psglauncher "${screen_type}" "${FRONT_MAIN_USER_ID}"
     fi
 
     # Install all apps
-    local apps=("${APPS_ALL_SCREENS[@]}" "${user_apps[@]}")
-    local app_id
-    for app_id in "${apps[@]}"; do
-      install_carmodapps_app "${screen_type}" "${app_id}" "${user_id}"
+    local apps=()
+    while IFS= read -r line; do
+      apps+=("$line")
+    done < <(get_carmodapps_apps "${screen_type}")
+
+    local app_filename
+    for app_filename in "${apps[@]}"; do
+      install_apk "${screen_type}" "${user_id}" "${app_filename}"
     done
 
     # Install custom packages
@@ -806,19 +765,26 @@ function install_front() {
 
     tweak_change_locale "${screen_type}" "${user_id}"
   done
+
+  # Disable PSG Launcher
+  tweak_disable_psglauncher "${screen_type}" "${FRONT_COPILOT_USER_ID}"
 }
 
 function install_rear() {
-  local user_id="${REAR_USER_ID}"
-  local apps=("${APPS_ALL_SCREENS[@]}" "${APPS_SCREEN_TYPE_REAR[@]}")
   local screen_type="${SCREEN_TYPE_REAR}"
+  local user_id="${REAR_USER_ID}"
 
   tweak_disable_psglauncher "${screen_type}" "${user_id}"
 
   # Install all apps
-  local app_id
-  for app_id in "${apps[@]}"; do
-    install_carmodapps_app "${screen_type}" "${app_id}" "${user_id}"
+  local apps=()
+  while IFS= read -r line; do
+    apps+=("$line")
+  done < <(get_carmodapps_apps "${screen_type}")
+
+  local app_filename
+  for app_filename in "${apps[@]}"; do
+    install_apk "${screen_type}" "${user_id}" "${app_filename}"
   done
 
   # Install custom packages
@@ -828,56 +794,6 @@ function install_rear() {
   tweak_ime_swiftkey "${screen_type}" "${user_id}"
 
   tweak_change_locale "${screen_type}" "${user_id}"
-}
-
-function check_all_apps_exists() {
-  local all_apps
-  local app_id
-  local error_missing_apps=false
-  local error_duplicate_apps=false
-  local exit_code=0
-
-  all_apps="${APPS_ALL_SCREENS[*]} ${APPS_SCREEN_TYPE_DRIVER[*]} ${APPS_SCREEN_TYPE_COPILOT[*]}${APPS_SCREEN_TYPE_REAR[*]}"
-  all_apps=$(fn_unique_str_list "${all_apps}")
-
-  for app_id in ${all_apps}; do
-    local count
-    count=$(get_app_files_count "${app_id}")
-
-    if [ "${count}" -eq 0 ]; then
-      log_error "[${app_id}] Приложение не найдено в папках packages/carmodapps или packages/user"
-      error_missing_apps=true
-      exit_code=1
-
-    elif [ "${count}" -gt 1 ]; then
-      log_error "[${app_id}] Найдено несколько файлов приложения:"
-
-      local app_file
-      while IFS= read -r -d '' app_file; do
-        log_error "[${app_id}]     ${app_file}"
-      done < <(find_app_files "$app_id")
-
-      error_duplicate_apps=true
-      exit_code=1
-    fi
-  done
-
-  if [ ${exit_code} -ne 0 ]; then
-    log_error "============================================================"
-    log_error " Ошибка при проверке приложений"
-    log_error "============================================================"
-  fi
-
-  if ${error_missing_apps}; then
-    log_error "Для автоматического скачивания приложений CarModApps необходимо выполнить команду \"${SCRIPT_BASENAME} update\""
-    log_error "Для ручного добавления сторонних приложений смотрите инструкцию: $(basename "$0") -h"
-  fi
-
-  if ${error_duplicate_apps}; then
-    log_error "Удалите дубликаты приложений и повторите попытку"
-  fi
-
-  return ${exit_code}
 }
 
 function do_display_vin() {
@@ -894,14 +810,6 @@ function do_display_vin() {
 
 function do_install() {
   local cpu_type
-
-  if ! fill_carmodapps_app_to_screens; then
-    exit 1
-  fi
-
-  if ! check_all_apps_exists; then
-    exit 1
-  fi
 
   cpu_type=$(adb_get_cpu_type)
 
@@ -972,20 +880,26 @@ function clear_for_screen() {
   local screen_type=$1
   local user_id=$2
   local non_system_apps
-  local keep_apps
+  local keep_app_ids=()
   local app_id
 
   non_system_apps=$(run_adb shell pm list packages --user "${user_id}" -3 | cut -d':' -f2)
-  keep_apps=$(get_screen_apps_ids "${screen_type}")
 
-  for app_id in ${keep_apps}; do
-    log_verbose "[${screen_type}] Keep app: ${app_id}"
-  done
+  while IFS= read -r app_filename; do
+    log_verbose "[${screen_type}][clear_for_screen] All app: ${app_filename}"
 
-  # For each app in keep_apps check if it is in not_clear_apps
-  # If not, delete it
+    local pkginfo_str
+    pkginfo_str=$(get_apk_package_info "${app_filename}")
+
+    local app_id
+    app_id=$(echo "${pkginfo_str}" | cut -f1)
+
+    keep_app_ids+=("${app_id}")
+
+  done < <(get_all_screen_apps "${screen_type}")
+
   for app_id in ${non_system_apps}; do
-    if ! echo "${keep_apps}" | grep -q "${app_id}"; then
+    if ! echo "${keep_app_ids[@]}" | grep -q "${app_id}"; then
       log_warn "[${screen_type}][$app_id] Удаление..."
 
       if ! run_adb uninstall --user "${user_id}" "${app_id}"; then
@@ -1113,6 +1027,7 @@ function do_update() {
         return 1
       fi
     fi
+
     # Save to index file
     echo "${app_id}|${app_local_filename_basename}|${app_screens}" >>"${PACKAGES_CMA_INDEX_FILE}"
 
@@ -1233,8 +1148,6 @@ function usage() {
 
   1. Создайте файл user_settings.sh
   2. Добавьте в него переопределение переменных
-     Пример добавления установки Angry birds из CarModApps на все экраны:
-        APPS_ALL_SCREENS+=("com.rovio.angrybirds")
 EOF
 }
 
