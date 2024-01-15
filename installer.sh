@@ -86,7 +86,7 @@ PACKAGES_CUSTOM_SCREEN_TYPE_REAR_DIR="${PACKAGES_DIR}/custom/rear"
 OPT_VERBOSE=false
 OPT_FORCE_INSTALL=false
 OPT_DELETE_BEFORE_INSTALL=false
-OPT_CLEAR_BEFORE_INSTALL=false
+#OPT_CLEAR_BEFORE_INSTALL=false # Нельзя использовать, т.к. она не удалит конфликты
 
 #################################################################
 # CPU/Screen types
@@ -1146,7 +1146,6 @@ function usage() {
   install: Запустить автоматическую установку приложений
   update: Загрузить приложения с сервера CarModApps
   delete: Удалить ВСЕ не системные приложения, включая CarModApps и пользовательские приложения
-  clear: Удалить все приложения, кроме CarModApps и пользовательских приложений
 
  Общие опции:
   -h, --help: Показать это сообщение
@@ -1155,7 +1154,6 @@ function usage() {
 
 Опции при запуске без команды:
   -d, Выполнить удаление ВСЕХ не системных приложений перед установкой
-  -c, Выполнить удаление всех приложений, кроме CarModApps и пользовательских приложений
 
 Для добавления своих приложений положите apk в папки:
 
@@ -1192,9 +1190,6 @@ function main() {
     -d)
       OPT_DELETE_BEFORE_INSTALL=true
       ;;
-    -c)
-      OPT_CLEAR_BEFORE_INSTALL=true
-      ;;
     vin | install | update | delete | clear)
       cmd="$1"
       ;;
@@ -1228,19 +1223,19 @@ function main() {
     wait_for_devices
     exec_on_all_devices do_delete
     ;;
-  clear)
-    wait_for_devices
-    exec_on_all_devices do_clear
-    ;;
   *)
     do_check_self_updates
     do_update
     wait_for_devices
+
     if ${OPT_DELETE_BEFORE_INSTALL}; then
       exec_on_all_devices do_delete
-    elif ${OPT_CLEAR_BEFORE_INSTALL}; then
-      exec_on_all_devices do_clear
+
+    # Нельзя использовать эту опцию, т.к. она не удалит конфликты
+    #elif ${OPT_CLEAR_BEFORE_INSTALL}; then
+    #  exec_on_all_devices do_clear
     fi
+
     exec_on_all_devices do_install
     exec_on_all_devices do_display_vin
     ;;
