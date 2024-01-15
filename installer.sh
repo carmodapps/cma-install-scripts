@@ -86,7 +86,6 @@ PACKAGES_CUSTOM_SCREEN_TYPE_REAR_DIR="${PACKAGES_DIR}/custom/rear"
 OPT_VERBOSE=false
 OPT_FORCE_INSTALL=false
 OPT_DELETE_BEFORE_INSTALL=false
-#OPT_CLEAR_BEFORE_INSTALL=false # Нельзя использовать, т.к. она не удалит конфликты
 
 #################################################################
 # CPU/Screen types
@@ -981,14 +980,14 @@ function clear_for_screen() {
   # If not, delete it
   for app_id in ${non_system_apps}; do
     if ! echo "${keep_apps}" | grep -q "${app_id}"; then
-      log_warn "[${screen_type}] Удаление ${app_id}..."
+      log_warn "[${screen_type}][$app_id] Удаление..."
 
       if ! run_adb uninstall --user "${user_id}" "${app_id}"; then
-        log_error "[${screen_type}] Удаление ${app_id}: ошибка"
+        log_error "[${screen_type}][$app_id] Удаление: ошибка"
         return 1
       fi
     else
-      log_verbose "[${screen_type}] Удаление не требуется для ${app_id}"
+      log_info "[${screen_type}][$app_id] Удаление не требуется"
     fi
   done
 }
@@ -1157,6 +1156,7 @@ function usage() {
   install: Запустить автоматическую установку приложений
   update: Загрузить приложения с сервера CarModApps
   delete: Удалить ВСЕ не системные приложения, включая CarModApps и пользовательские приложения
+  clear: Удалить все сторонние приложения, кроме CarModApps и пользовательских приложений (ТОЛБКО для экспертов!)
 
  Общие опции:
   -h, --help: Показать это сообщение
@@ -1234,6 +1234,10 @@ function main() {
     wait_for_devices
     exec_on_all_devices do_delete
     ;;
+  clear)
+    wait_for_devices
+    exec_on_all_devices do_clear
+    ;;
   *)
     do_check_self_updates
     do_update
@@ -1241,10 +1245,6 @@ function main() {
 
     if ${OPT_DELETE_BEFORE_INSTALL}; then
       exec_on_all_devices do_delete
-
-    # Нельзя использовать эту опцию, т.к. она не удалит конфликты
-    #elif ${OPT_CLEAR_BEFORE_INSTALL}; then
-    #  exec_on_all_devices do_clear
     fi
 
     exec_on_all_devices do_install
