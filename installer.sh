@@ -66,8 +66,9 @@ FRONT_MAIN_USER_ID=0
 FRONT_COPILOT_USER_ID=21473
 REAR_USER_ID=0
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-SCRIPT_BASENAME="$(basename "${BASH_SOURCE[0]}")"
+SCRIPT_REALPATH="$(readlink -f "$0")"
+SCRIPT_BASENAME=$(basename "${SCRIPT_REALPATH}")
+SCRIPT_DIR=$(dirname "${SCRIPT_REALPATH}")
 
 # read VERSION file
 VERSION_FILE="${SCRIPT_DIR}/VERSION"
