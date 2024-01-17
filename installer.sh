@@ -159,6 +159,18 @@ function fn_unique_str_list() {
 #################################################################
 # Run commands
 
+function log_cmd_with_args() {
+  local cmd=$1
+  shift
+  local args=("$@")
+  local cmd_str="$cmd"
+  local arg
+  for arg in "${args[@]}"; do
+    cmd_str+=" '$arg'"
+  done
+  echo "$cmd_str"
+}
+
 function run_cmd() {
   local cmd=$1
   shift
@@ -166,15 +178,17 @@ function run_cmd() {
   local cmd_basename
   cmd_basename=$(basename "${cmd}")
 
-  log_verbose "${cmd_basename} $*"
+  local cmd_with_args
+  cmd_with_args=$(log_cmd_with_args "$cmd" "$@")
+  log_verbose "${cmd_with_args}"
 
   local exit_code
-  "${cmd}" "$@"
+  "$cmd" "$@"
   exit_code=$?
 
-  if [ ${exit_code} -ne 0 ]; then
-    log_error "${cmd_basename} $*"
-    exit ${exit_code}
+  if [ $exit_code -ne 0 ]; then
+    log_error "${cmd_with_args} (exit code: ${exit_code})"
+    return $exit_code
   fi
 }
 
