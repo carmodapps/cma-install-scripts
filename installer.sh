@@ -1098,7 +1098,8 @@ function do_update() {
     # Remove old app files
     local old_app_file
     while IFS= read -r -d '' old_app_file; do
-      local old_app_file_basename=$(basename "${old_app_file}")
+      local old_app_file_basename
+      old_app_file_basename=$(basename "${old_app_file}")
       if [ "${old_app_file}" == "${app_local_filename}" ]; then
         # This is current app file, skip
         continue
