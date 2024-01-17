@@ -55,6 +55,7 @@ OPT_FORCE_INSTALL=false
 OPT_DELETE_BEFORE_INSTALL=false
 
 UPDATE_CHANNEL="release"
+UPDATE_CHANNEL_EXTRA_HEADERS=()
 
 #################################################################
 # CPU/Screen types
@@ -1008,7 +1009,6 @@ function do_check_self_updates() {
 function do_update() {
   local api_url="https://store.carmodapps.com/api/applications/download"
 
-  local extra_headers_file="$HOME/cma_liauto_installer_headers.txt"
   local headers=(
     "Accept: text/plain"
   )
@@ -1026,24 +1026,10 @@ function do_update() {
   local curl_params
   curl_params=(-s -G)
 
-  # Add headers to the curl command parameters array
-  for line in "${headers[@]}"; do
+  # Add headers, add all from UPDATE_CHANNEL_EXTRA_HEADERS
+  for line in "${headers[@]}" "${UPDATE_CHANNEL_EXTRA_HEADERS[@]}"; do
     curl_params+=(-H "${line}")
   done
-
-  # Read extra headers from file and add them to the curl command parameters
-  if [ -f "${extra_headers_file}" ]; then
-    log_info "Получение дополнительных заголовков из файла: ${extra_headers_file}"
-    while IFS= read -r line; do
-      # if line is empty, or starts with # (comment) - continue
-      if [[ "${line}" =~ ^#.*$ ]] || [ -z "${line}" ]; then
-        continue
-      fi
-      curl_params+=(-H "${line}")
-    done <"${extra_headers_file}"
-  else
-    log_verbose "Файл с дополнительными заголовками не найден: ${extra_headers_file}"
-  fi
 
   local tmp_index_file
   tmp_index_file=$(mktemp)
