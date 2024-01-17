@@ -21,6 +21,7 @@ TWEAK_SET_NIGHT_MODE=true
 TWEAK_DISABLE_PSGLAUNCHER=true
 TWEAK_IME_SWIFTKEY=true
 TWEAK_CHANGE_LOCALE=true
+TWEAK_START_APPS_ON_COPILOT_AFTER_INSTALL=true # Чтобы появились ярлыки на экране пассажира (баг лаунчера у Li)
 
 #################################################################
 # System vars
@@ -504,6 +505,53 @@ function tweak_change_locale() {
   fi
 }
 
+function tweak_start_apps_on_copilot_after_install() {
+  local screen_type=$1
+  local user_id=$2
+
+  if ! ${TWEAK_START_APPS_ON_COPILOT_AFTER_INSTALL}; then
+    log_verbose "[${screen_type}] Запуск приложений после установки отключен"
+    return 0
+  fi
+
+  log_info "[${screen_type}] Запуск приложений после установки..."
+
+  local apps=()
+  local line
+  while IFS= read -r line; do
+    apps+=("$line")
+  done < <(get_carmodapps_apps "${screen_type}")
+
+  local app_filename
+  for app_filename in "${apps[@]}"; do
+    local pkginfo_str
+    pkginfo_str=$(get_apk_package_info "${app_filename}")
+
+    local app_id
+    local app_version_code
+    local app_version_name
+    app_id=$(echo "${pkginfo_str}" | cut -f1)
+    app_version_code=$(echo "${pkginfo_str}" | cut -f2)
+    app_version_name=$(echo "${pkginfo_str}" | cut -f3)
+
+    local main_activity
+    main_activity=$(get_apk_main_activity "${app_id}")
+
+    if [ -z "${main_activity}" ]; then
+      log_error "[${screen_type}] [${app_id}] Не удалось получить имя main activity"
+      continue
+    fi
+
+    log_info "[${screen_type}] Запуск ${app_id}..."
+
+    if ! run_adb shell am start --user "${user_id}" -n "${main_activity}"; then
+      log_error "[${screen_type}] [${app_id}] Запуск: ошибка"
+      return 1
+    fi
+  done
+
+}
+
 #################################################################
 
 # Return: app_id"\t"version_code"\t"version_name
@@ -600,6 +648,27 @@ function get_apk_permissions() {
   fi
 
   echo "${aapt_output}"
+}
+
+function get_apk_main_activity() {
+  local app_id=$1
+  local dumpsys_output
+  local main_activity
+
+  dumpsys_output=$(run_adb shell dumpsys package "$app_id")
+
+  main_activity=$(echo "$dumpsys_output" | awk -v pkg="$app_id" '
+        /android.intent.action.MAIN:/ {
+            getline; activity = $2
+        }
+        /Category: "android.intent.category.LAUNCHER"/ {
+            print activity
+            exit
+        }
+    ')
+  log_trace "[adb_shell_get_main_activity] Main activity: ${main_activity}"
+
+  echo "$main_activity"
 }
 
 #
@@ -788,6 +857,11 @@ function install_front() {
     tweak_ime_swiftkey "${screen_type}" "${user_id}"
 
     tweak_change_locale "${screen_type}" "${user_id}"
+
+    # If screen copilot, start apps after install
+    if [ "${screen_type}" == "${SCREEN_TYPE_COPILOT}" ]; then
+      tweak_start_apps_on_copilot_after_install "${screen_type}" "${user_id}"
+    fi
   done
 
   # Disable PSG Launcher

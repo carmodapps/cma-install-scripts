@@ -23,6 +23,7 @@
 # TWEAK_DISABLE_PSGLAUNCHER=true
 # TWEAK_IME_SWIFTKEY=true
 # TWEAK_CHANGE_LOCALE=true
+# TWEAK_START_APPS_ON_COPILOT_AFTER_INSTALL=true
 
 #
 # Доступ к отдельному каналу обновлений
