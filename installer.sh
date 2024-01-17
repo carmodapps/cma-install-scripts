@@ -58,6 +58,8 @@ OPT_VERBOSE=false
 OPT_FORCE_INSTALL=false
 OPT_DELETE_BEFORE_INSTALL=false
 
+UPDATE_CHANNEL="release"
+
 #################################################################
 # CPU/Screen types
 
@@ -118,6 +120,12 @@ if [ -f "${USER_DEFINED_SETTINGS_OVERRIDE_FILE}" ]; then
   # shellcheck disable=SC1090
   source "${USER_DEFINED_SETTINGS_OVERRIDE_FILE}"
 fi
+
+#################################################################
+# Variables which SHOULD NOT be overriden by user
+
+PACKAGES_CMA_DIR="${PACKAGES_DIR}/carmodapps"
+PACKAGES_CMA_INDEX_FILE="${PACKAGES_CMA_DIR}/index.txt"
 
 #################################################################
 # Logging
@@ -1002,13 +1010,65 @@ function do_check_self_updates() {
 
 function do_update() {
   local api_url="https://store.carmodapps.com/api/applications/download"
-  local apps_url_list
+
+  local extra_headers_file="$HOME/cma_liauto_installer_headers.txt"
+  local headers=(
+    "Accept: text/plain"
+  )
 
   mkdir -p "${PACKAGES_CMA_DIR}"
 
-  log_info "Проверка обновлений приложений..."
+  log_info "Проверка обновлений приложений ($UPDATE_CHANNEL)..."
 
-  apps_url_list=$(curl -s -G -H "Accept: text/plain" "${api_url}")
+  # if UPDATE_CHANNEL!=release
+  if [ "${UPDATE_CHANNEL}" != "release" ]; then
+    api_url="${api_url}?updateChannel=${UPDATE_CHANNEL}"
+  fi
+
+  # Array to store curl command parameters
+  local curl_params
+  curl_params=(-s -G)
+
+  # Add headers to the curl command parameters array
+  for line in "${headers[@]}"; do
+    curl_params+=(-H "${line}")
+  done
+
+  # Read extra headers from file and add them to the curl command parameters
+  if [ -f "${extra_headers_file}" ]; then
+    log_info "Получение дополнительных заголовков из файла: ${extra_headers_file}"
+    while IFS= read -r line; do
+      # if line is empty, or starts with # (comment) - continue
+      if [[ "${line}" =~ ^#.*$ ]] || [ -z "${line}" ]; then
+        continue
+      fi
+      curl_params+=(-H "${line}")
+    done <"${extra_headers_file}"
+  else
+    log_verbose "Файл с дополнительными заголовками не найден: ${extra_headers_file}"
+  fi
+
+  local tmp_index_file
+  tmp_index_file=$(mktemp)
+  log_verbose "tmp_index_file: ${tmp_index_file}"
+
+  curl_params+=(
+    -o "${tmp_index_file}"
+    -w "%{http_code}"
+    "${api_url}"
+  )
+
+  # Execute the curl command with expanded array parameters
+  local http_status_code
+  http_status_code=$(run_cmd curl "${curl_params[@]}")
+
+  if [ "${http_status_code}" != "200" ]; then
+    log_error "Ошибка получения списка приложений: (HTTP ${http_status_code}): $(cat "${tmp_index_file}")"
+    return 1
+  fi
+
+  local apps_url_list
+  apps_url_list=$(cat "${tmp_index_file}")
 
   # Clean index file
   echo -n "" >"${PACKAGES_CMA_INDEX_FILE}"
@@ -1021,6 +1081,7 @@ function do_update() {
     local app_local_filename
     local app_local_filename_basename
     local app_screens
+    local app_upd_channel
 
     if [ -z "${app_line}" ]; then
       continue
@@ -1031,17 +1092,18 @@ function do_update() {
     app_filename=$(echo "$app_line" | cut -d'|' -f2)
     app_url=$(echo "$app_line" | cut -d'|' -f3)
     app_screens=$(echo "$app_line" | cut -d'|' -f4)
+    app_upd_channel=$(echo "$app_line" | cut -d'|' -f5)
 
     app_local_filename="${PACKAGES_CMA_DIR}/${app_filename}"
     app_local_filename_basename=$(basename "${app_local_filename}")
 
     if [ -f "${app_local_filename}" ]; then
-      log_verbose "[${app_id}] Уже загружен, пропускаем..."
+      log_info "[${app_id}]  ($app_upd_channel) Уже загружен, пропускаем..."
     else
-      log_info "[${app_id}] Загрузка..."
+      log_info "[${app_id}]  ($app_upd_channel) Загрузка..."
 
       if ! curl -s -o "${app_local_filename}" "${app_url}"; then
-        log_error "[${app_id}] Загрузка: ошибка"
+        log_error "[${app_id}]  ($app_upd_channel) Загрузка: ошибка"
         # Exit from script, we already cleaned index file
         exit 1
       fi
@@ -1053,11 +1115,12 @@ function do_update() {
     # Remove old app files
     local old_app_file
     while IFS= read -r -d '' old_app_file; do
+      local old_app_file_basename=$(basename "${old_app_file}")
       if [ "${old_app_file}" == "${app_local_filename}" ]; then
         # This is current app file, skip
         continue
       fi
-      log_warn "[${app_id}] Удаление старого файла ${old_app_file}..."
+      log_warn "[${app_id}] Удаление старого файла ${old_app_file_basename}..."
       rm -f "${old_app_file}"
     done < <(find_app_files "$app_id")
   done
@@ -1174,6 +1237,12 @@ EOF
 
 function main() {
   local cmd
+
+  if [ "${UPDATE_CHANNEL}" != "release" ]; then
+    log_warn "============================================================"
+    log_warn "Вы используете канал обновлений: ${UPDATE_CHANNEL}"
+    log_warn "============================================================"
+  fi
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
