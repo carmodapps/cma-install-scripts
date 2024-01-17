@@ -515,7 +515,7 @@ function get_installed_package_info() {
 
   local adb_output
   adb_output=$(
-    run_adb shell dumpsys package |
+    run_adb shell dumpsys package "$app_id" |
       awk -v app_id="$app_id" -v user_id="$user_id" '
       $0 ~ "Package \\[" app_id "\\]" {
         package_found = 1
