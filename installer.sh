@@ -6,10 +6,6 @@
 # Таймзона по-умолчанию, если не удалось определить таймзону компьютера
 DEFAULT_TIMEZONE="Europe/Moscow"
 
-# Если существует файл user_settings.sh, то он будет загружен
-# В нём можно переопределить переменные
-USER_DEFINED_SETTINGS_OVERRIDE_FILE="user_settings.sh"
-
 #################################################################
 # Разрешения appops для приложений
 # Они будут выданы автоматически если в манифесте приложения есть соответствующие разрешения
@@ -18,7 +14,7 @@ PERMISSIONS_APPOPS=(
 )
 
 #################################################################
-# Настройки активных твиков (можно отключить через user_settings.sh)
+# Настройки активных твиков (можно отключить через config.sh)
 
 TWEAK_SET_TIMEZONE=true
 TWEAK_SET_NIGHT_MODE=true
@@ -114,11 +110,12 @@ if [ ! -f "${AAPT}" ]; then
 fi
 
 #################################################################
-# Handle USER_DEFINED_SETTINGS_OVERRIDE_FILE
+# Handle Config
 
-if [ -f "${USER_DEFINED_SETTINGS_OVERRIDE_FILE}" ]; then
+CONFIG_FILE="${SCRIPT_DIR}/config.sh"
+if [ -f "${CONFIG_FILE}" ]; then
   # shellcheck disable=SC1090
-  source "${USER_DEFINED_SETTINGS_OVERRIDE_FILE}"
+  source "${CONFIG_FILE}"
 fi
 
 #################################################################
@@ -1228,8 +1225,11 @@ function usage() {
 
 Кастомизация настроек (для продвинутых пользователей):
 
-  1. Создайте файл user_settings.sh
+  1. Создайте файл config.sh
   2. Добавьте в него переопределение переменных
+
+  Пример файла можно посмотреть в config.sh.example
+
 EOF
 }
 

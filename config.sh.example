@@ -1,0 +1,32 @@
+#
+# Это файл-пример.
+#
+# Для того, чтобы применить свои параметры, создайте файл config.sh
+# и переопределите в нем нужные переменные.
+#
+
+#
+# Принудительно установить приложения, даже если они уже установлены
+# (аналог опции -f)
+#
+# OPT_FORCE_INSTALL=true
+
+#
+# OPT_DELETE_BEFORE_INSTALL=true
+
+#
+# Твики, поставьте true/false для нужных (по-умолчанию см. installer.sh)
+#
+# TWEAK_SET_TIMEZONE=true
+# TWEAK_SET_NIGHT_MODE=true
+# TWEAK_DISABLE_PSGLAUNCHER=true
+# TWEAK_IME_SWIFTKEY=true
+# TWEAK_CHANGE_LOCALE=true
+
+#
+# Доступ к отдельному каналу обновлений
+# (ТОЛЬКО ДЛЯ АДМИНОВ с авторизацией)
+#
+# Для использования закрытых веток нужно создать файл cma_liauto_installer_headers.txt в домашней директории
+#
+# UPDATE_CHANNEL=beta
