@@ -168,9 +168,13 @@ function run_cmd() {
 
   log_verbose "${cmd_basename} $*"
 
-  if ! "${cmd}" "$@"; then
+  local exit_code
+  "${cmd}" "$@"
+  exit_code=$?
+
+  if [ ${exit_code} -ne 0 ]; then
     log_error "${cmd_basename} $*"
-    return 1
+    exit ${exit_code}
   fi
 }
 
