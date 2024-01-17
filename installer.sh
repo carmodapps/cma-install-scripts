@@ -72,9 +72,10 @@ SCREEN_TYPE_REAR="Задний экран"
 
 HOST_TIMEZONE=""
 
-# Determine the platform and set the binary path
-case "$(uname -s)" in
-Darwin)
+UNAME_S=$(uname -s)
+
+# Determine the platform and set the binary paths
+if [ "${UNAME_S}" == "Darwin" ]; then
   # Mac OS X platform
   HOST_TIMEZONE=$(readlink /etc/localtime | sed 's#.*/zoneinfo/##')
   ADB="${SCRIPT_DIR}/3rd_party/bin/mac/$(uname -m)/adb"
@@ -87,18 +88,20 @@ Darwin)
       xattr -d com.apple.quarantine "${bin}"
     fi
   done
-  ;;
-Linux)
+elif [ "${UNAME_S}" == "Linux" ]; then
   # Linux platform
   HOST_TIMEZONE=$(cat /etc/timezone)
   ADB="${SCRIPT_DIR}/3rd_party/bin/linux/adb"
   AAPT="${SCRIPT_DIR}/3rd_party/bin/linux/aapt"
-  ;;
-*)
-  echo "Неизвестная платформа: $(uname -s)"
+
+elif [[ "${UNAME_S}" =~ ^MINGW64 ]]; then
+  # Windows platform
+  ADB="${SCRIPT_DIR}/3rd_party/bin/windows/x86_64/adb"
+  AAPT="${SCRIPT_DIR}/3rd_party/bin/windows/x86_64/aapt"
+else
+  echo "Неизвестная платформа: ${UNAME_S}"
   exit 1
-  ;;
-esac
+fi
 
 if [ ! -f "${ADB}" ]; then
   echo "ADB не найден: ${ADB}"
