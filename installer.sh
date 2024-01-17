@@ -1024,7 +1024,8 @@ function do_update() {
 
       if ! curl -s -o "${app_local_filename}" "${app_url}"; then
         log_error "[${app_id}] Загрузка: ошибка"
-        return 1
+        # Exit from script, we already cleaned index file
+        exit 1
       fi
     fi
 
