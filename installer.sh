@@ -462,8 +462,13 @@ function tweak_disable_psglauncher() {
 
   log_info "[${screen_type}] Отключение PSGLauncher"
 
-  run_adb shell pm disable-user --user "${user_id}" com.lixiang.psglauncher
-  run_adb shell pm clear --user "${user_id}" com.lixiang.psglauncher
+  #run_adb shell pm disable-user --user "${user_id}" com.lixiang.psglauncher
+  #run_adb shell pm clear --user "${user_id}" com.lixiang.psglauncher
+
+  # Юзера 21473 указывать не надо...
+  run_adb shell pm disable-user com.lixiang.psglauncher
+  run_adb shell pm clear com.lixiang.psglauncher
+
 
   # Команда для включения PSGLauncher (без --user)
   # adb shell pm enable com.lixiang.psglauncher
