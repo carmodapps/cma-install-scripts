@@ -464,6 +464,9 @@ function tweak_disable_psglauncher() {
 
   run_adb shell pm disable-user --user "${user_id}" com.lixiang.psglauncher
   run_adb shell pm clear --user "${user_id}" com.lixiang.psglauncher
+
+  # Команда для включения PSGLauncher (без --user)
+  # adb shell pm enable com.lixiang.psglauncher
 }
 
 function tweak_ime_swiftkey() {
