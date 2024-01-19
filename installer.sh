@@ -224,6 +224,9 @@ function get_cpu_type() {
   HU_SS2MAXR)
     echo "${CPU_TYPE_REAR}"
     ;;
+  HU_SS2PRO)
+    echo "${CPU_TYPE_FRONT}"
+    ;;
   *)
     log_error "Неизвестный тип CPU: ${product_type}"
     return 1
