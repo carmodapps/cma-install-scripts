@@ -19,7 +19,8 @@ PERMISSIONS_APPOPS=(
 TWEAK_SET_TIMEZONE=true
 TWEAK_SET_NIGHT_MODE=true
 TWEAK_DISABLE_PSGLAUNCHER=true
-TWEAK_IME_SWIFTKEY=true
+#TWEAK_IME="com.touchtype.swiftkey/com.touchtype.KeyboardService" #
+TWEAK_IME="com.carmodapps.simplekeyboard.inputmethod/.latin.LatinIME"
 TWEAK_CHANGE_LOCALE=true
 
 #################################################################
@@ -472,27 +473,29 @@ function tweak_disable_psglauncher() {
   run_adb shell pm disable-user com.lixiang.psglauncher
   run_adb shell pm clear com.lixiang.psglauncher
 
-
   # Команда для включения PSGLauncher (без --user)
   # adb shell pm enable com.lixiang.psglauncher
 }
 
-function tweak_ime_swiftkey() {
+function tweak_ime() {
   local screen_type=$1
   local user_id=$2
 
-  if ! ${TWEAK_IME_SWIFTKEY}; then
-    log_verbose "[${screen_type}] Настройка SwiftKey отключена"
+  # if TWEAK_IME is empty
+  if [ -z "${TWEAK_IME}" ]; then
+    log_verbose "[${screen_type}] Настройка IME отключена"
     return 0
   fi
 
+  log_info "[${screen_type}] Настройка IME (${TWEAK_IME})..."
+
   run_adb shell ime disable --user "${user_id}" com.baidu.input/.ImeService &&
     run_adb shell ime disable --user "$user_id" com.android.inputmethod.latin/.LatinIME &&
-    run_adb shell ime enable --user "${user_id}" com.touchtype.swiftkey/com.touchtype.KeyboardService &&
-    run_adb shell ime set --user "${user_id}" com.touchtype.swiftkey/com.touchtype.KeyboardService
+    run_adb shell ime enable --user "${user_id}" "${TWEAK_IME}" &&
+    run_adb shell ime set --user "${user_id}" "${TWEAK_IME}"
 
   if [ $? -ne 0 ]; then
-    log_error "[${screen_type}] Настройка SwiftKey: ошибка"
+    log_error "[${screen_type}] Настройка IME: ошибка"
     return 1
   fi
 }
@@ -796,7 +799,7 @@ function install_front() {
     install_custom_packages "${screen_type}" "${user_id}"
 
     # Run at the end, because swiftkey is installed, but may be not available
-    tweak_ime_swiftkey "${screen_type}" "${user_id}"
+    tweak_ime "${screen_type}" "${user_id}"
 
     tweak_change_locale "${screen_type}" "${user_id}"
   done
@@ -826,7 +829,7 @@ function install_rear() {
   install_custom_packages "${screen_type}" "${user_id}"
 
   # Run at the end, because swiftkey is installed, but may be not available
-  tweak_ime_swiftkey "${screen_type}" "${user_id}"
+  tweak_ime "${screen_type}" "${user_id}"
 
   tweak_change_locale "${screen_type}" "${user_id}"
 }
