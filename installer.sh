@@ -43,7 +43,6 @@ fi
 
 PACKAGES_DIR="${SCRIPT_DIR}/packages"
 PACKAGES_CMA_DIR="${PACKAGES_DIR}/carmodapps"
-PACKAGES_CMA_INDEX_FILE="${PACKAGES_CMA_DIR}/index.txt"
 
 OPT_VERBOSE=false
 OPT_FORCE_INSTALL=false
@@ -57,13 +56,14 @@ UPDATE_CHANNEL_EXTRA_HEADERS=()
 
 CAR_TYPE_UNKNOWN="Неизвестный автомобиль"
 CAR_TYPE_LIAUTO="LiAuto"
+CAR_TYPE_ZEEKR="Zeekr"
 
 CAR_TYPE_LIAUTO_TAG="LI"
-CAR_TYPE_LIAUTO_ZEEKR_TAG="ZEEKR"
+CAR_TYPE_ZEEKR_TAG="ZEEKR"
 
 ALL_CAR_TYPES_TAGS=(
   "${CAR_TYPE_LIAUTO_TAG}"
-  "${CAR_TYPE_LIAUTO_ZEEKR_TAG}"
+  "${CAR_TYPE_ZEEKR_TAG}"
 )
 
 CPU_TYPE_MAIN="Основной CPU"
@@ -72,6 +72,10 @@ CPU_TYPE_REAR="Задний CPU"
 SCREEN_TYPE_DRIVER="Экран водителя"
 SCREEN_TYPE_COPILOT="Экран пассажира"
 SCREEN_TYPE_REAR="Задний экран"
+
+SCREEN_TYPE_DRIVER_TAG="driver"
+SCREEN_TYPE_COPILOT_TAG="copilot"
+SCREEN_TYPE_REAR_TAG="rear"
 
 #################################################################
 # Setup Platform-specific vars
@@ -208,11 +212,30 @@ function run_adb() {
 }
 
 function run_aapt() {
-  run_cmd "${AAPT}" "$@"
+  # TODO: We got this worning, so send stderr to /dev/null
+  #  AndroidManifest.xml:41: error: ERROR getting 'android:name' attribute: attribute is not an integer value
+  run_cmd "${AAPT}" "$@" 2>/dev/null
 }
 
 #################################################################
-# CPU/Screen types helpers
+# Car/CPU/Screen types helpers
+
+function get_car_tag() {
+  local car_type=$1
+
+  case "${car_type}" in
+  "${CAR_TYPE_LIAUTO}")
+    echo "${CAR_TYPE_LIAUTO_TAG}"
+    ;;
+  "${CAR_TYPE_ZEEKR}")
+    echo "${CAR_TYPE_ZEEKR_TAG}"
+    ;;
+  *)
+    log_error "get_car_tag: неизвестный тип автомобиля: ${car_type}"
+    exit 1
+    ;;
+  esac
+}
 
 function get_screen_type_liauto_ss2() {
   local cpu_type=$1
@@ -306,56 +329,24 @@ function get_screen_type() {
   esac
 }
 
-# Get only carmodapps apps for screen type
-function get_carmodapps_apps() {
+function get_screen_type_tag() {
   local screen_type=$1
-  local filter
 
   case "${screen_type}" in
   "${SCREEN_TYPE_DRIVER}")
-    filter="driver"
+    echo "${SCREEN_TYPE_DRIVER_TAG}"
     ;;
   "${SCREEN_TYPE_COPILOT}")
-    filter="copilot"
+    echo "${SCREEN_TYPE_COPILOT_TAG}"
     ;;
   "${SCREEN_TYPE_REAR}")
-    filter="rear"
+    echo "${SCREEN_TYPE_REAR_TAG}"
     ;;
   *)
-    log_error "[get_carmodapps_apps] Неизвестный тип экрана: ${screen_type}"
+    log_error "get_screen_type_tag: неизвестный тип экрана: ${screen_type}"
     exit 1
     ;;
   esac
-
-  log_verbose "[${screen_type}][get_carmodapps_apps] Получение списка приложений CarModApps..."
-
-  local line
-  while IFS= read -r line; do
-    local app_id
-    local app_filename_basename
-    local app_filename
-    local app_screen_types
-    app_id=$(echo "${line}" | cut -d'|' -f1)
-    app_filename_basename=$(echo "${line}" | cut -d'|' -f2)
-    app_screen_types=$(echo "${line}" | cut -d'|' -f3)
-
-    app_filename="${PACKAGES_CMA_DIR}/${app_filename_basename}"
-
-    # app_screen_types format: driver,copilot,rear (coma-separated list of screen types)
-    if echo "${app_screen_types}" | grep -q "${filter}"; then
-      log_verbose "[${screen_type}][get_carmodapps_apps][${app_id} (${app_screen_types}) - OK]"
-      echo "${app_filename}"
-    else
-      log_verbose "[${screen_type}][get_carmodapps_apps][${app_id} (${app_screen_types}) - SKIP]"
-    fi
-
-  done < <(cat "${PACKAGES_CMA_INDEX_FILE}")
-}
-
-function get_all_screen_apps() {
-  local screen_type=$1
-
-  get_carmodapps_apps "${screen_type}"
 }
 
 #################################################################
@@ -602,11 +593,11 @@ function get_tweaks_liauto() {
     echo "tweak_set_night_mode"
     ;;
   "${SCREEN_TYPE_COPILOT}")
-    echo "tweak_disable_psglauncher"
+    echo "tweak_liauto_disable_psglauncher"
     ;;
   "${SCREEN_TYPE_REAR}")
     echo "tweak_set_timezone"
-    echo "tweak_disable_psglauncher"
+    echo "tweak_liauto_disable_psglauncher"
     ;;
   esac
 
@@ -709,7 +700,7 @@ function get_apk_package_info() {
   '
   )
 
-  #  log_verbose "[$(basename "${file_name}")] aapt_output: ${aapt_output}"
+    log_verbose "[$(basename "${file_name}")] aapt_output: ${aapt_output}"
 
   if [ -z "${aapt_output}" ]; then
     log_error "[$(basename "${file_name}")] Ошибка получения информации о приложении"
@@ -717,6 +708,44 @@ function get_apk_package_info() {
   fi
 
   echo "${aapt_output}"
+}
+
+# Return "true"/"false"
+function get_badging_user_field_value() {
+  local app_id=$1
+  local user_id=$2
+  local field=$3
+
+  # adb shell dumpsys package ${app_id}
+  # Packages:
+  #   Package [com.carmodapps.cmalauncher]
+  #     User 0: ceDataInode=1357657 installed=true hidden=false suspended=false distractionFlags=0 stopped=false notLaunched=false enabled=0 instant=false virtual=false
+  #     User 21473: ceDataInode=0 installed=false hidden=false suspended=false distractionFlags=0 stopped=true notLaunched=true enabled=3 instant=false virtual=false
+
+  local value
+  value=$(run_adb shell dumpsys package "${app_id}" |
+   awk -v app="$app_id" -v user="$user_id" -v field="$field" '
+    $0 ~ "Package \\[" app "\\]" {pkg=1}
+    pkg && $0 ~ "User " user ":" {user_found=1}
+    user_found && $0 ~ field "=" {
+        split($0, fields, " ")
+        for (i in fields) {
+            if (fields[i] ~ "^" field "=") {
+                split(fields[i], kv, "=")
+                print kv[2]
+            }
+        }
+        exit
+    }')
+
+  log_verbose "dumpsys_package_get_user_field_value: [${app_id}][user:${user_id}] '${field}' = '${value}'"
+
+  if [ -z "${value}" ]; then
+    log_error "dumpsys_package_get_user_field_value: [${app_id}][user:${user_id}] Поле ${field} не найдено"
+    exit 1
+  fi
+
+  echo "${value}"
 }
 
 # Return permissions, separated by \n
@@ -772,51 +801,48 @@ function find_app_first_file() {
 }
 
 function install_apk() {
-  local screen_type=$1
-  local user_id=$2
-  local app_filename=$3
+  local car_type=$1
+  local cpu_type=$2
+  local user_id=$3
+  local app_filename=$4
+  local screen_type=$(get_screen_type "${car_type}" "${cpu_type}" "${user_id}")
+  #local log_prefix="[${car_type}][$cpu_type][user:${user_id}] ${screen_type} -"
+  local log_prefix="[${car_type}][$cpu_type] ${screen_type} -"
 
   if [ ! -f "${app_filename}" ]; then
-    log_error "[${screen_type}] Файл не найден: ${app_filename}"
+    log_error "install_apk Файл не найден: ${app_filename}"
     return 1
   fi
 
   #
   # Get local app info
   #
-  local pkginfo_str
-  pkginfo_str=$(get_apk_package_info "${app_filename}")
+  local pkginfo_str=$(get_apk_package_info "${app_filename}")
 
-  local app_id
-  local app_version_code
-  local app_version_name
-  app_id=$(echo "${pkginfo_str}" | cut -f1)
-  app_version_code=$(echo "${pkginfo_str}" | cut -f2)
-  app_version_name=$(echo "${pkginfo_str}" | cut -f3)
+  local app_id=$(echo "${pkginfo_str}" | cut -f1)
+  local app_version_code=$(echo "${pkginfo_str}" | cut -f2)
+  local app_version_name=$(echo "${pkginfo_str}" | cut -f3)
 
-  log_verbose "[${screen_type}] [${app_id}] Локальная версия apk: ${app_version_name} (${app_version_code})"
+  log_verbose "${log_prefix} Локальная версия apk: ${app_version_name} (${app_version_code})"
 
   #
   # Get device app info
   #
-  local package_info_output
-  package_info_output=$(get_installed_package_info "${app_id}" "${user_id}")
+  local package_info_output=$(get_installed_package_info "${app_id}" "${user_id}")
 
   # if package_info_output not empty
   if [ -n "${package_info_output}" ]; then
-    local installed_version_code
-    local installed_version_name
-    installed_version_code=$(echo "${package_info_output}" | cut -f2)
-    installed_version_name=$(echo "${package_info_output}" | cut -f3)
+    local installed_version_code=$(echo "${package_info_output}" | cut -f2)
+    local installed_version_name=$(echo "${package_info_output}" | cut -f3)
 
-    log_verbose "[${screen_type}] [${app_id}] Установленная версия apk: ${installed_version_name} (${installed_version_code})"
+    log_verbose "${log_prefix} Установленная версия ${app_id}: ${installed_version_name} (${installed_version_code})"
 
     # if version code and version name are the same
     if [ "${app_version_code}" -eq "${installed_version_code}" ] && [ "${app_version_name}" == "${installed_version_name}" ]; then
       if ${OPT_FORCE_INSTALL}; then
-        log_info "[${screen_type}] [${app_id}] Установленная версия apk совпадает с локальной, но установка принудительно включена, устанавливаем: ${app_version_name} (${app_version_code})"
+        log_info "${log_prefix} Устанавливаем принудительно: ${app_id}"
       else
-        log_info "[${screen_type}] [${app_id}] Установленная версия apk совпадает с локальной, пропускаем установку: ${app_version_name} (${app_version_code})"
+        log_info "${log_prefix} Уже установлено: ${app_id}"
         return 0
       fi
     fi
@@ -824,26 +850,26 @@ function install_apk() {
     # if installed version code is greater than local version code
     if [ "${installed_version_code}" -gt "${app_version_code}" ]; then
       if ${OPT_FORCE_INSTALL}; then
-        log_warn "[${screen_type}] [${app_id}] Установленная версия apk (${installed_version_name} (${installed_version_code})) больше локальной (${app_version_name} (${app_version_code})), принудительно устанавливаем"
+        log_warn "${log_prefix} Установленная версия ${app_id} (${installed_version_name} (${installed_version_code})) больше локальной ('${app_version_name}' (${app_version_code})), принудительно устанавливаем"
 
-        log_info "[${screen_type}] [${app_id}] Удаление старой версии apk..."
+        log_info "${log_prefix} Удаление старой версии ${app_id} ..."
         # !!! Мы должны удалить старый со ВСЕХ мониторов, а не только с текущего, не используем --user
         if ! run_adb uninstall "${app_id}"; then
           #if ! _run_adb uninstall --user "${user_id}" "${app_id}"; then
-          log_error "[${screen_type}] [${app_id}] Удаление старой версии apk: ошибка"
+          log_error "${log_prefix} Удаление старой версии ${app_id}: ошибка"
           return 1
         fi
       else
-        log_error "[${screen_type}] [${app_id}] Установленная версия apk (${installed_version_name} (${installed_version_code})) больше локальной (${app_version_name} (${app_version_code})), пропускаем установку"
+        log_error "${log_prefix} Установленная версия ${app_id} (${installed_version_name} (${installed_version_code})) больше локальной ('${app_version_name}' (${app_version_code})), пропускаем установку"
         return 1
       fi
     fi
   fi
 
-  log_info "[${screen_type}] [$app_id] Установка..."
+  log_info "${log_prefix} Установка ${app_id} ..."
 
   if ! run_adb install -r -g --user "${user_id}" "${app_filename}"; then
-    log_error "[${screen_type}] [$app_id] Установка: ошибка"
+    log_error "${log_prefix} Установка ${app_id}: ошибка"
     return 1
   fi
 
@@ -857,14 +883,44 @@ function install_apk() {
   done
 
   for opt in "${appops[@]}"; do
-    log_info "[${screen_type}] [$app_id] Выдача разрешения ${opt}..."
+    log_info "${log_prefix} Выдача разрешения ${app_id} ${opt}..."
 
     if ! run_adb shell appops set --user "${user_id}" "${app_id}" "${opt}" allow; then
-      log_error "[${screen_type}] [$app_id] Выдача разрешения ${opt}: ошибка"
+      log_error "${log_prefix} Выдача разрешения ${app_id} ${opt}: ошибка"
       return 1
     fi
   done
 }
+
+function uninstall_app_id() {
+  local car_type=$1
+  local cpu_type=$2
+  local user_id=$3
+  local app_id=$4
+  local screen_type=$(get_screen_type "${car_type}" "${cpu_type}" "${user_id}")
+  #local log_prefix="[${car_type}][$cpu_type][user:${user_id}] ${screen_type} -"
+  local log_prefix="[${car_type}][$cpu_type] ${screen_type} -"
+
+  local package_info_output=$(get_installed_package_info "${app_id}" "${user_id}")
+
+  # if package_info_output not empty
+  if [ -n "${package_info_output}" ]; then
+    local installed_version_code=$(echo "${package_info_output}" | cut -f2)
+    local installed_version_name=$(echo "${package_info_output}" | cut -f3)
+
+    log_verbose "${log_prefix} Установленная версия ${app_id}: ${installed_version_name} (${installed_version_code})"
+
+    log_info "${log_prefix} Удаление ${app_id} ..."
+
+    if ! run_adb uninstall --user "${user_id}" "${app_id}"; then
+      log_error "${log_prefix} Удаление ${app_id}: ошибка"
+      return 1
+    fi
+  else
+    log_verbose "${log_prefix} Удаление ${app_id} не требуется"
+  fi
+}
+
 
 function apply_tweaks() {
   local car_type=$1
@@ -880,7 +936,10 @@ function apply_tweaks() {
     for tweak in ${tweaks}; do
       log_info "[${car_type}][$cpu_type][user:${user_id}] Применение твика: ${tweak}"
 
-      ${tweak} "${car_type}" "${cpu_type}" "${user_id}"
+      if ! ${tweak} "${car_type}" "${cpu_type}" "${user_id}" ; then
+        log_error "[${car_type}][$cpu_type][user:${user_id}] Применение твика ${tweak}: ошибка"
+        return 1
+      fi
     done
   else
     log_info "[${car_type}][$cpu_type][user:${user_id}] Твики не найдены"
@@ -903,6 +962,7 @@ function do_install() {
   local car_type
   local cpu_type
   local users
+  local user_id
   local log_prefix
 
   car_type=$(adb_get_car_type)
@@ -910,18 +970,64 @@ function do_install() {
   users=$(adb_get_users)
   log_prefix="[${car_type}][${cpu_type}]"
 
-  local user_id
-  for user_id in ${users}; do
-    local screen_type
-    screen_type=$(get_screen_type "${car_type}" "${cpu_type}" "${user_id}")
+  local car_tag
+  car_tag=$(get_car_tag "${car_type}")
+  local car_packages_cma_dir="${PACKAGES_CMA_DIR}/${car_tag}"
+  local car_packages_cma_index_file="${car_packages_cma_dir}/index.txt"
 
-    log_info "[${car_type}][$cpu_type][user:${user_id}] ${screen_type} - установка приложений..."
-    # FIXME: Add install logic
-    log_error "do_install: NOT IMPLEMENTED"
+  ############################
+  # Prepare all_apps_array
+  local all_apps_array=()
+  local line
+  while IFS= read -r line; do
+    # Push line to all_apps_array
+    all_apps_array+=("${line}")
+  done < <(cat "${car_packages_cma_index_file}")
+
+  ############################
+  # Install with user ID 0 needed apps.
+  for line in "${all_apps_array[@]}"; do
+    # Get app_id, app_filename_basename, app_screen_types
+    local app_id
+    local app_filename_basename
+    local app_filename
+    local app_screen_types
+    app_id=$(echo "${line}" | cut -d'|' -f1)
+    app_filename_basename=$(echo "${line}" | cut -d'|' -f2)
+    app_screen_types=$(echo "${line}" | cut -d'|' -f3)
+
+    app_filename="${car_packages_cma_dir}/${app_filename_basename}"
+
+    ############################
+    # Disable if not enabled for screen
+    for user_id in ${users}; do
+      local screen_type=$(get_screen_type "${car_type}" "${cpu_type}" "${user_id}")
+      local screen_type_tag=$(get_screen_type_tag "${screen_type}")
+      local screen_log_prefix="[${car_type}][$cpu_type][user:${user_id}] ${screen_type} -"
+      local should_be_installed=$(echo "${app_screen_types}" | grep -q "${screen_type_tag}" && echo "true" || echo "false")
+
+      # Check if app is installed for this user
+      #local is_installed=$(get_badging_user_field_value "${app_id}" "${user_id}" "installed")
+      #log_verbose "${screen_log_prefix} ${app_id} - is_installed: ${is_installed} should_be_installed: ${should_be_installed}"
+      #if [ "${is_installed}" == "true" ] && [ "${should_be_installed}" == "false" ]; then
+      # ...
+      #elif [ "${is_installed}" == "false" ] && [ "${should_be_installed}" == "true" ]; then
+      # ...
+      #fi
+
+      if [ "${should_be_installed}" == "false" ]; then
+        uninstall_app_id "${car_type}" "${cpu_type}" "${user_id}" "${app_id}"
+      elif [ "${should_be_installed}" == "true" ]; then
+        install_apk "${car_type}" "${cpu_type}" "${user_id}" "${app_filename}"
+      fi
+    done
+
   done
 
   log_info "${log_prefix} Установка завершена, применение твиков..."
 
+  ############################
+  # Tweaks
   for user_id in ${users}; do
     local screen_type
     screen_type=$(get_screen_type "${car_type}" "${cpu_type}" "${user_id}")
@@ -959,7 +1065,7 @@ function do_delete() {
       log_info "[${car_type}][$cpu_type][user:${user_id}] Удаление всех приложений, кроме системных..."
 
       for app_id in ${non_system_apps}; do
-        log_info "[${car_type}][$cpu_type][user:${user_id}] Удаление ${app_id}..."
+        log_info "[${car_type}][$cpu_type][user:${user_id}] Удаление ${app_id} ..."
 
         if ! run_adb uninstall --user "${user_id}" "${app_id}"; then
           log_error "[${car_type}][$cpu_type][user:${user_id}] Удаление ${app_id}: ошибка"
@@ -1047,7 +1153,7 @@ function do_update_for_car_tag() {
 
   mkdir -p "${car_packages_cma_dir}"
 
-  log_info "Проверка обновлений приложений, автомобиль: $car_tag, канал: $UPDATE_CHANNEL..."
+  log_info "Проверка обновлений приложений, автомобиль: $car_tag, канал: $UPDATE_CHANNEL ..."
 
   # if UPDATE_CHANNEL!=release
   if [ "${UPDATE_CHANNEL}" != "release" ]; then
@@ -1148,7 +1254,7 @@ function do_update_for_car_tag() {
         continue
       fi
 
-      log_warn "${app_log_prefix} Удаление старого файла ${old_app_file_basename}..."
+      log_warn "${app_log_prefix} Удаление старого файла ${old_app_file_basename} ..."
       rm -f "${old_app_file}"
     done < <(find_app_files "${car_packages_cma_dir}" "$app_id")
   done
