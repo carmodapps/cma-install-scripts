@@ -681,31 +681,34 @@ function get_apk_permissions() {
 }
 
 #
-# Find app files in PACKAGES_CMA_DIR
+# Find app files in provided dir
 # Return: list of files separated by \0
 function find_app_files() {
-  local app_id=$1
+  local dir=$1
+  local app_id=$2
 
-  find "${PACKAGES_CMA_DIR}" -name "${app_id}*.apk" -print0
+  find "${dir}" -name "${app_id}-*.apk" -print0
 }
 
 function get_app_files_count() {
-  local app_id=$1
+  local dir=$1
+  local app_id=$2
   local count_cma
 
-  count_cma=$(find "${PACKAGES_CMA_DIR}" -name "${app_id}*.apk" | wc -l | xargs)
+  count_cma=$(find "${dir}" -name "${app_id}-*.apk" | wc -l | xargs)
 
-  log_verbose "[${app_id}] Количество файлов приложения: ${count_cma}"
+  log_verbose "[${app_id}] Количество файлов приложения: ${count_cma} (${dir})"
 
   echo "${count_cma}"
 }
 
 function find_app_first_file() {
-  local app_id=$1
+  local dir=$1
+  local app_id=$2
 
   # Use _find_app_files and get the first file
   local app_file
-  app_file=$(find_app_files "${app_id}" | head -n 1)
+  app_file=$(find_app_files "${dir}" "${app_id}" | head -n 1)
 
   echo "${app_file}"
 }
@@ -1083,7 +1086,8 @@ function do_update_for_car_tag() {
     "Accept: text/plain"
   )
   local car_packages_cma_dir="${PACKAGES_CMA_DIR}/${car_tag}"
-  local log_prefix="[${car_tag}][$UPDATE_CHANNEL]"
+  local car_packages_cma_index_file="${car_packages_cma_dir}/index.txt"
+  local log_prefix="[${car_tag}]"
 
   mkdir -p "${car_packages_cma_dir}"
 
@@ -1126,7 +1130,7 @@ function do_update_for_car_tag() {
   apps_url_list=$(cat "${tmp_index_file}")
 
   # Clean index file
-  echo -n "" >"${PACKAGES_CMA_INDEX_FILE}"
+  echo -n "" >"${car_packages_cma_index_file}"
 
   local app_line
   for app_line in ${apps_url_list}; do
@@ -1152,33 +1156,45 @@ function do_update_for_car_tag() {
     app_local_filename="${car_packages_cma_dir}/${app_filename}"
     app_local_filename_basename=$(basename "${app_local_filename}")
 
-    if [ -f "${app_local_filename}" ]; then
-      log_info "${log_prefix}[${app_id}]  ($app_upd_channel) Уже загружен, пропускаем..."
-    else
-      log_info "${log_prefix}[${app_id}]  ($app_upd_channel) Загрузка..."
+    # app_screens is not empty ? need_download=true : need_download=false
+    local need_download
+    [ -n "${app_screens}" ] && need_download=true || need_download=false
 
-      if ! curl -s -o "${app_local_filename}" "${app_url}"; then
-        log_error "${log_prefix}[${app_id}]  ($app_upd_channel) Загрузка: ошибка"
-        # Exit from script, we already cleaned index file
-        exit 1
+    local app_log_prefix="${log_prefix}[${app_upd_channel}][${app_id}]"
+
+    # Check if enabled for at least one screen
+    if [ "${need_download}" == "true" ]; then
+      if [ -f "${app_local_filename}" ]; then
+        log_info "${app_log_prefix} Уже загружен. (${app_screens})"
+      else
+        log_info "${app_log_prefix} Загрузка... (${app_screens})"
+
+        if ! curl -s -o "${app_local_filename}" "${app_url}"; then
+          log_error "${app_log_prefix} Загрузка: ошибка"
+          # Exit from script, we already cleaned index file
+          exit 1
+        fi
       fi
+
+      # Save to index file
+      echo "${app_id}|${app_local_filename_basename}|${app_screens}|${app_upd_channel}" >>"${car_packages_cma_index_file}"
     fi
 
-    # Save to index file
-    echo "${app_id}|${app_local_filename_basename}|${app_screens}" >>"${PACKAGES_CMA_INDEX_FILE}"
 
     # Remove old app files
     local old_app_file
     while IFS= read -r -d '' old_app_file; do
       local old_app_file_basename
       old_app_file_basename=$(basename "${old_app_file}")
-      if [ "${old_app_file}" == "${app_local_filename}" ]; then
+
+      if [[ "${need_download}" == "true" &&  "${old_app_file}" == "${app_local_filename}" ]]; then
         # This is current app file, skip
         continue
       fi
-      log_warn "${log_prefix}[${app_id}] Удаление старого файла ${old_app_file_basename}..."
+
+      log_warn "${app_log_prefix} Удаление старого файла ${old_app_file_basename}..."
       rm -f "${old_app_file}"
-    done < <(find_app_files "$app_id")
+    done < <(find_app_files "${car_packages_cma_dir}" "$app_id")
   done
 
 }
