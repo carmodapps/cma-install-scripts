@@ -141,7 +141,7 @@ PACKAGES_CMA_INDEX_FILE="${PACKAGES_CMA_DIR}/index.txt"
 #################################################################
 # Logging
 
-LOG_PREFIX="####LiAuto### "
+LOG_PREFIX="####CMA### "
 
 ANSI_GREEN="\033[32m"
 ANSI_YELLOW="\033[33m"
@@ -150,20 +150,20 @@ ANSI_GRAY="\033[37m"
 ANSI_RESET="\033[0m"
 
 function log_info() {
-  echo -e "${ANSI_GREEN}${LOG_PREFIX}$1${ANSI_RESET}" >&2
+  echo -e "${ANSI_GREEN}${LOG_PREFIX}[I] $1${ANSI_RESET}" >&2
 }
 
 function log_warn() {
-  echo -e "${ANSI_YELLOW}${LOG_PREFIX}[Предупреждение] $1${ANSI_RESET}" >&2
+  echo -e "${ANSI_YELLOW}${LOG_PREFIX}[W] $1${ANSI_RESET}" >&2
 }
 
 function log_error() {
-  echo -e "${ANSI_RED}${LOG_PREFIX}[Ошибка] $1${ANSI_RESET}" >&2
+  echo -e "${ANSI_RED}${LOG_PREFIX}[E] $1${ANSI_RESET}" >&2
 }
 
 function log_verbose() {
   if ${OPT_VERBOSE}; then
-    echo -e "${ANSI_GRAY}${LOG_PREFIX}$1${ANSI_RESET}" >&2
+    echo -e "${ANSI_GRAY}${LOG_PREFIX}[V] $1${ANSI_RESET}" >&2
   fi
 }
 
