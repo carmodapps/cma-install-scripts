@@ -16,12 +16,10 @@ PERMISSIONS_APPOPS=(
 #################################################################
 # Настройки активных твиков (можно отключить через config.sh)
 
-TWEAK_SET_TIMEZONE=true
-TWEAK_SET_NIGHT_MODE=true
-TWEAK_DISABLE_PSGLAUNCHER=true
-#TWEAK_IME="com.touchtype.swiftkey/com.touchtype.KeyboardService" #
-TWEAK_IME="com.carmodapps.simplekeyboard.inputmethod/.latin.LatinIME"
-TWEAK_CHANGE_LOCALE=true
+TWEAK_IME_APP="com.carmodapps.simplekeyboard.inputmethod/.latin.LatinIME"
+
+DISABLED_TWEAKS=(
+)
 
 #################################################################
 # System vars
@@ -471,11 +469,6 @@ function tweak_set_timezone() {
   local timezone
   local origin
 
-  if ! ${TWEAK_SET_TIMEZONE}; then
-    log_verbose "[${car_type}][$cpu_type][user:${user_id}] Установка часового пояса отключена"
-    return 0
-  fi
-
   # if HOST_TIMEZONE is set, use it
   if [ -n "${HOST_TIMEZONE}" ]; then
     timezone="${HOST_TIMEZONE}"
@@ -500,11 +493,6 @@ function tweak_set_night_mode() {
 
   log_info "[${car_type}][$cpu_type][user:${user_id}] Установка ночного режима..."
 
-  if ! ${TWEAK_SET_NIGHT_MODE}; then
-    log_verbose "[${car_type}][$cpu_type][user:${user_id}] Установка ночного режима отключена"
-    return 0
-  fi
-
   if ! run_adb shell cmd uimode night yes; then
     log_error "[${car_type}][$cpu_type][user:${user_id}] Установка ночного режима: ошибка"
     return 1
@@ -515,11 +503,6 @@ function tweak_liauto_disable_psglauncher() {
   local car_type=$1
   local cpu_type=$2
   local user_id=$3
-
-  if ! ${TWEAK_DISABLE_PSGLAUNCHER}; then
-    log_verbose "[${car_type}][$cpu_type][user:${user_id}] Отключение PSGLauncher отключено"
-    return 0
-  fi
 
   log_info "[${car_type}][$cpu_type][user:${user_id}] Отключение PSGLauncher"
 
@@ -539,18 +522,12 @@ function tweak_ime() {
   local cpu_type=$2
   local user_id=$3
 
-  # if TWEAK_IME is empty
-  if [ -z "${TWEAK_IME}" ]; then
-    log_verbose "[${car_type}][$cpu_type][user:${user_id}] Настройка IME отключена"
-    return 0
-  fi
-
-  log_info "[${car_type}][$cpu_type][user:${user_id}] Настройка IME (${TWEAK_IME})..."
+  log_info "[${car_type}][$cpu_type][user:${user_id}] Настройка IME (${TWEAK_IME_APP})..."
 
   run_adb shell ime disable --user "${user_id}" com.baidu.input/.ImeService &&
     run_adb shell ime disable --user "$user_id" com.android.inputmethod.latin/.LatinIME &&
-    run_adb shell ime enable --user "${user_id}" "${TWEAK_IME}" &&
-    run_adb shell ime set --user "${user_id}" "${TWEAK_IME}"
+    run_adb shell ime enable --user "${user_id}" "${TWEAK_IME_APP}" &&
+    run_adb shell ime set --user "${user_id}" "${TWEAK_IME_APP}"
 
   if [ $? -ne 0 ]; then
     log_error "[${car_type}][$cpu_type][user:${user_id}] Настройка IME: ошибка"
@@ -563,11 +540,6 @@ function tweak_change_locale() {
   local cpu_type=$2
   local user_id=$3
   local locale="en_US"
-
-  if ! ${TWEAK_CHANGE_LOCALE}; then
-    log_verbose "[${car_type}][$cpu_type][user:${user_id}] Установка локали отключена"
-    return 0
-  fi
 
   log_info "[${car_type}][$cpu_type][user:${user_id}] Установка локали ${locale}..."
 
@@ -922,23 +894,46 @@ function uninstall_app_id() {
 }
 
 
+# return: "true"/"false"
+function is_tweak_enabled() {
+  local car_type=$1
+  local cpu_type=$2
+  local user_id=$3
+  local tweak=$4
+
+  # If tweak in DISABLED_TWEAKS
+  local disabled_tweak
+  for disabled_tweak in "${DISABLED_TWEAKS[@]}"; do
+    if [ "${tweak}" == "${disabled_tweak}" ]; then
+      log_verbose "[${car_type}][$cpu_type][user:${user_id}] Твик ${tweak} отключен"
+      echo "false"
+      return 0
+    fi
+  done
+  echo "true"
+}
+
+
 function apply_tweaks() {
   local car_type=$1
   local cpu_type=$2
   local user_id=$3
-
-  local tweaks
-  tweaks=$(get_tweaks "${car_type}" "${cpu_type}" "${user_id}")
+  local tweaks=$(get_tweaks "${car_type}" "${cpu_type}" "${user_id}")
 
   # if not empty
   if [ -n "${tweaks}" ]; then
     local tweak
     for tweak in ${tweaks}; do
+      local enabled=$(is_tweak_enabled "${car_type}" "${cpu_type}" "${user_id}" "${tweak}")
+      if [ "${enabled}" == "false" ]; then
+        log_warn "[${car_type}][$cpu_type][user:${user_id}] Применение твика ${tweak}: отключено"
+        continue
+      fi
+
       log_info "[${car_type}][$cpu_type][user:${user_id}] Применение твика: ${tweak}"
 
       if ! ${tweak} "${car_type}" "${cpu_type}" "${user_id}" ; then
         log_error "[${car_type}][$cpu_type][user:${user_id}] Применение твика ${tweak}: ошибка"
-        return 1
       fi
     done
   else
@@ -985,7 +980,7 @@ function do_install() {
   done < <(cat "${car_packages_cma_index_file}")
 
   ############################
-  # Install with user ID 0 needed apps.
+  # Install
   for line in "${all_apps_array[@]}"; do
     # Get app_id, app_filename_basename, app_screen_types
     local app_id

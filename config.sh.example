@@ -16,13 +16,15 @@
 # OPT_DELETE_BEFORE_INSTALL=true
 
 #
-# Твики, поставьте true/false для нужных (по-умолчанию см. installer.sh)
+# Исключенные твики
 #
-# TWEAK_SET_TIMEZONE=true
-# TWEAK_SET_NIGHT_MODE=true
-# TWEAK_DISABLE_PSGLAUNCHER=true
-# TWEAK_IME_SWIFTKEY=true
-# TWEAK_CHANGE_LOCALE=true
+# DISABLED_TWEAKS=(
+#   "tweak_set_timezone"
+#   "tweak_set_night_mode"
+#   "tweak_liauto_disable_psglauncher"
+#   "tweak_ime"
+#   "tweak_change_locale"
+# )
 
 #
 # Доступ к отдельному каналу обновлений
