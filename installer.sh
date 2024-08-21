@@ -28,9 +28,6 @@ TWEAK_CHANGE_LOCALE=true
 
 ADB="adb"
 AAPT="aapt"
-FRONT_MAIN_USER_ID=0
-FRONT_COPILOT_USER_ID=21473
-REAR_USER_ID=0
 
 SCRIPT_REALPATH="$(readlink -f "$0")"
 SCRIPT_BASENAME=$(basename "${SCRIPT_REALPATH}")
@@ -217,31 +214,96 @@ function run_aapt() {
 #################################################################
 # CPU/Screen types helpers
 
-
-function get_screen_type() {
+function get_screen_type_liauto_ss2() {
   local cpu_type=$1
   local user_id=$2
 
-  if [ "${cpu_type}" == "${CPU_TYPE_MAIN}" ]; then
-    if [ "${user_id}" == "${FRONT_MAIN_USER_ID}" ]; then
-      echo "${SCREEN_TYPE_DRIVER}"
-    elif [ "${user_id}" == "${FRONT_COPILOT_USER_ID}" ]; then
+  case "${cpu_type}" in
+  "${CPU_TYPE_MAIN}")
+
+    if [ "${user_id}" -eq 21473 ]; then
       echo "${SCREEN_TYPE_COPILOT}"
+    elif [ "${user_id}" -eq 0 ]; then
+      echo "${SCREEN_TYPE_DRIVER}"
     else
-      log_error "Неизвестный user_id: ${user_id}, cpu_type: ${cpu_type}"
+      log_error "get_screen_type_liauto_ss2: неизвестный user_id: ${user_id}"
       exit 1
     fi
-  elif [ "${cpu_type}" == "${CPU_TYPE_REAR}" ]; then
-    if [ "${user_id}" == "${REAR_USER_ID}" ]; then
-      echo "${SCREEN_TYPE_REAR}"
-    else
-      log_error "Неизвестный user_id: ${user_id}, cpu_type: ${cpu_type}"
-      exit 1
-    fi
-  else
-    log_error "Неизвестный тип CPU: ${cpu_type}, cpu_type: ${cpu_type}"
+    ;;
+
+  "${CPU_TYPE_REAR}")
+    echo "${SCREEN_TYPE_REAR}"
+    ;;
+  esac
+}
+
+function get_screen_type_liauto_ss3() {
+  local cpu_type=$1
+  local user_id=$2
+
+  if [ "${cpu_type}" != "${CPU_TYPE_MAIN}" ]; then
+    log_error "get_screen_type_liauto_ss3: неизвестный cpu_type: ${cpu_type}"
     exit 1
   fi
+
+  if [ "${user_id}" -eq 21473 ]; then
+    echo "${SCREEN_TYPE_COPILOT}"
+  elif [ "${user_id}" -eq 6174 ]; then
+    echo "${SCREEN_TYPE_REAR}"
+  elif [ "${user_id}" -eq 0 ]; then
+    echo "${SCREEN_TYPE_DRIVER}"
+  else
+    log_error "get_screen_type_liauto_ss3: неизвестный user_id: ${user_id}"
+    exit 1
+  fi
+}
+
+function get_screen_type_liauto() {
+  local cpu_type=$1
+  local user_id=$2
+  local platform # ro.boot.board.platform
+
+  platform=$(run_adb shell getprop ro.boot.board.platform) # SS2MAX/SS2PRO/SS3
+
+  case "${platform}" in
+  "SS2MAX"|"SS2PRO")
+    get_screen_type_liauto_ss2 "${cpu_type}" "${user_id}"
+    ;;
+  "SS3")
+    get_screen_type_liauto_ss3 "${cpu_type}" "${user_id}"
+    ;;
+  *)
+    log_error "get_screen_type_liauto: неизвестная платформа: '${platform}'"
+    exit 1
+    ;;
+  esac
+}
+
+function get_screen_type_zeekr() {
+  local cpu_type=$1
+  local user_id=$2
+
+  # Zeekr: - only driver screen
+  echo "${SCREEN_TYPE_DRIVER}"
+}
+
+function get_screen_type() {
+  local car_type=$1
+  local cpu_type=$2
+  local user_id=$3
+
+  case "${car_type}" in
+  "${CAR_TYPE_LIAUTO}")
+    get_screen_type_liauto "${cpu_type}" "${user_id}"
+    ;;
+  "${CAR_TYPE_LIAUTO_ZEEKR}")
+    get_screen_type_zeekr "${cpu_type}" "${user_id}"
+    ;;
+  *)
+    log_error "[${car_type}][$cpu_type][user:${user_id}] get_screen_type: use default ${SCREEN_TYPE_DRIVER}"
+    echo "${SCREEN_TYPE_DRIVER}"
+    ;;
+  esac
 }
 
 # Get only carmodapps apps for screen type
@@ -412,11 +474,14 @@ function adb_get_users(){
 # Tweaks
 
 function tweak_set_timezone() {
+  local car_type=$1
+  local cpu_type=$2
+  local user_id=$3
   local timezone
   local origin
 
   if ! ${TWEAK_SET_TIMEZONE}; then
-    log_verbose "Установка часового пояса отключена"
+    log_verbose "[${car_type}][$cpu_type][user:${user_id}] Установка часового пояса отключена"
     return 0
   fi
 
@@ -429,38 +494,43 @@ function tweak_set_timezone() {
     origin="по-умолчанию"
   fi
 
-  log_info "Установка часового пояса (${timezone}, ${origin})..."
+  log_info "[${car_type}][$cpu_type][user:${user_id}] Установка часового пояса (${timezone}, ${origin})..."
 
   if ! run_adb shell service call alarm 3 s16 "${timezone}" >/dev/null; then
-    log_error "Установка часового пояса (${timezone}, ${origin}): ошибка"
+    log_error "[${car_type}][$cpu_type][user:${user_id}] Установка часового пояса (${timezone}, ${origin}): ошибка"
     return 1
   fi
 }
 
 function tweak_set_night_mode() {
-  log_info "Установка ночного режима..."
+  local car_type=$1
+  local cpu_type=$2
+  local user_id=$3
+
+  log_info "[${car_type}][$cpu_type][user:${user_id}] Установка ночного режима..."
 
   if ! ${TWEAK_SET_NIGHT_MODE}; then
-    log_verbose "Установка ночного режима отключена"
+    log_verbose "[${car_type}][$cpu_type][user:${user_id}] Установка ночного режима отключена"
     return 0
   fi
 
   if ! run_adb shell cmd uimode night yes; then
-    log_error "Установка ночного режима: ошибка"
+    log_error "[${car_type}][$cpu_type][user:${user_id}] Установка ночного режима: ошибка"
     return 1
   fi
 }
 
-function tweak_disable_psglauncher() {
-  local screen_type=$1
-  local user_id=$2
+function tweak_liauto_disable_psglauncher() {
+  local car_type=$1
+  local cpu_type=$2
+  local user_id=$3
 
   if ! ${TWEAK_DISABLE_PSGLAUNCHER}; then
-    log_verbose "[${screen_type}] Отключение PSGLauncher отключено"
+    log_verbose "[${car_type}][$cpu_type][user:${user_id}] Отключение PSGLauncher отключено"
     return 0
   fi
 
-  log_info "[${screen_type}] Отключение PSGLauncher"
+  log_info "[${car_type}][$cpu_type][user:${user_id}] Отключение PSGLauncher"
 
   #run_adb shell pm disable-user --user "${user_id}" com.lixiang.psglauncher
   #run_adb shell pm clear --user "${user_id}" com.lixiang.psglauncher
@@ -474,16 +544,17 @@ function tweak_disable_psglauncher() {
 }
 
 function tweak_ime() {
-  local screen_type=$1
-  local user_id=$2
+  local car_type=$1
+  local cpu_type=$2
+  local user_id=$3
 
   # if TWEAK_IME is empty
   if [ -z "${TWEAK_IME}" ]; then
-    log_verbose "[${screen_type}] Настройка IME отключена"
+    log_verbose "[${car_type}][$cpu_type][user:${user_id}] Настройка IME отключена"
     return 0
   fi
 
-  log_info "[${screen_type}] Настройка IME (${TWEAK_IME})..."
+  log_info "[${car_type}][$cpu_type][user:${user_id}] Настройка IME (${TWEAK_IME})..."
 
   run_adb shell ime disable --user "${user_id}" com.baidu.input/.ImeService &&
     run_adb shell ime disable --user "$user_id" com.android.inputmethod.latin/.LatinIME &&
@@ -491,27 +562,82 @@ function tweak_ime() {
     run_adb shell ime set --user "${user_id}" "${TWEAK_IME}"
 
   if [ $? -ne 0 ]; then
-    log_error "[${screen_type}] Настройка IME: ошибка"
+    log_error "[${car_type}][$cpu_type][user:${user_id}] Настройка IME: ошибка"
     return 1
   fi
 }
 
 function tweak_change_locale() {
-  local screen_type=$1
-  local user_id=$2
+  local car_type=$1
+  local cpu_type=$2
+  local user_id=$3
   local locale="en_US"
 
   if ! ${TWEAK_CHANGE_LOCALE}; then
-    log_verbose "[${screen_type}] Установка локали отключена"
+    log_verbose "[${car_type}][$cpu_type][user:${user_id}] Установка локали отключена"
     return 0
   fi
 
-  log_info "[${screen_type}] Установка локали ${locale}..."
+  log_info "[${car_type}][$cpu_type][user:${user_id}] Установка локали ${locale}..."
 
   if ! run_adb shell am start --user "${user_id}" -n "com.carmodapps.carstore/.ChangeSystemLocaleActivity" --es locale "${locale}"; then
-    log_error "[${screen_type}] Установка локали ${locale}: ошибка"
+    log_error "[${car_type}][$cpu_type][user:${user_id}] Установка локали ${locale}: ошибка"
     return 1
   fi
+}
+
+#################################################################
+
+function get_tweaks_liauto() {
+  local cpu_type=$1
+  local user_id=$2
+  local screen_type
+
+  screen_type=$(get_screen_type "${CAR_TYPE_LIAUTO}" "${cpu_type}" "${user_id}")
+
+  case "${screen_type}" in
+  "${SCREEN_TYPE_DRIVER}")
+    echo "tweak_change_locale"
+    echo "tweak_set_timezone"
+    echo "tweak_set_night_mode"
+    ;;
+  "${SCREEN_TYPE_COPILOT}")
+    echo "tweak_disable_psglauncher"
+    ;;
+  "${SCREEN_TYPE_REAR}")
+    echo "tweak_set_timezone"
+    echo "tweak_disable_psglauncher"
+    ;;
+  esac
+
+  # IME - for all users
+  echo "tweak_ime"
+}
+
+function get_tweaks_zeekr() {
+  local cpu_type=$1
+  local user_id=$2
+
+  # TODO: Implement
+}
+
+function get_tweaks() {
+  local car_type=$1
+  local cpu_type=$2
+  local user_id=$3
+
+  case "${car_type}" in
+  "${CAR_TYPE_LIAUTO}")
+    get_tweaks_liauto "${cpu_type}" "${user_id}"
+    ;;
+  "${CAR_TYPE_LIAUTO_ZEEKR}")
+    get_tweaks_zeekr "${cpu_type}" "${user_id}"
+    ;;
+  *)
+    log_warn "No tweaks for car type: ${car_type}"
+    exit 1
+    ;;
+  esac
 }
 
 #################################################################
@@ -740,62 +866,25 @@ function install_apk() {
   done
 }
 
-function install_front() {
-  local users=("${FRONT_MAIN_USER_ID}" "${FRONT_COPILOT_USER_ID}")
+function apply_tweaks() {
+  local car_type=$1
+  local cpu_type=$2
+  local user_id=$3
 
-  local user_id
-  for user_id in "${users[@]}"; do
-    local screen_type
+  local tweaks
+  tweaks=$(get_tweaks "${car_type}" "${cpu_type}" "${user_id}")
 
-    if [ "${user_id}" == "${FRONT_MAIN_USER_ID}" ]; then
-      screen_type="${SCREEN_TYPE_DRIVER}"
-    else
-      screen_type="${SCREEN_TYPE_COPILOT}"
-    fi
+  # if not empty
+  if [ -n "${tweaks}" ]; then
+    local tweak
+    for tweak in ${tweaks}; do
+      log_info "[${car_type}][$cpu_type][user:${user_id}] Применение твика: ${tweak}"
 
-    # Install all apps
-    local apps=()
-    while IFS= read -r line; do
-      apps+=("$line")
-    done < <(get_carmodapps_apps "${screen_type}")
-
-    local app_filename
-    for app_filename in "${apps[@]}"; do
-      install_apk "${screen_type}" "${user_id}" "${app_filename}"
+      ${tweak} "${car_type}" "${cpu_type}" "${user_id}"
     done
-
-
-    # Run at the end, because swiftkey is installed, but may be not available
-    tweak_ime "${screen_type}" "${user_id}"
-
-    tweak_change_locale "${screen_type}" "${user_id}"
-  done
-
-  # Disable PSG Launcher
-  tweak_disable_psglauncher "${screen_type}" "${FRONT_COPILOT_USER_ID}"
-}
-
-function install_rear() {
-  local screen_type="${SCREEN_TYPE_REAR}"
-  local user_id="${REAR_USER_ID}"
-
-  tweak_disable_psglauncher "${screen_type}" "${user_id}"
-
-  # Install all apps
-  local apps=()
-  while IFS= read -r line; do
-    apps+=("$line")
-  done < <(get_carmodapps_apps "${screen_type}")
-
-  local app_filename
-  for app_filename in "${apps[@]}"; do
-    install_apk "${screen_type}" "${user_id}" "${app_filename}"
-  done
-
-  # Run at the end, because swiftkey is installed, but may be not available
-  tweak_ime "${screen_type}" "${user_id}"
-
-  tweak_change_locale "${screen_type}" "${user_id}"
+  else
+    log_info "[${car_type}][$cpu_type][user:${user_id}] Твики не найдены"
+  fi
 }
 
 function do_display_vin() {
@@ -813,31 +902,36 @@ function do_display_vin() {
 function do_install() {
   local car_type
   local cpu_type
+  local users
   local log_prefix
 
   car_type=$(adb_get_car_type)
   cpu_type=$(adb_get_cpu_type)
+  users=$(adb_get_users)
   log_prefix="[${car_type}][${cpu_type}]"
 
-  log_info "${log_prefix} Установка приложений..."
-  return
+  local user_id
+  for user_id in ${users}; do
+    local screen_type
+    screen_type=$(get_screen_type "${car_type}" "${cpu_type}" "${user_id}")
 
-  case "${cpu_type}" in
-  "${CPU_TYPE_MAIN}")
-    tweak_set_timezone
-    tweak_set_night_mode
-    install_front
-    ;;
-  "${CPU_TYPE_REAR}")
-    tweak_set_timezone
-    tweak_set_night_mode
-    install_rear
-    ;;
-  default)
-    log_error "Неизвестный тип CPU: ${cpu_type}"
-    exit 1
-    ;;
-  esac
+    log_info "[${car_type}][$cpu_type][user:${user_id}] ${screen_type} - установка приложений..."
+    # FIXME: Add install logic
+    log_error "do_install: NOT IMPLEMENTED"
+  done
+
+  log_info "${log_prefix} Установка завершена, применение твиков..."
+
+  for user_id in ${users}; do
+    local screen_type
+    screen_type=$(get_screen_type "${car_type}" "${cpu_type}" "${user_id}")
+
+    log_info "[${car_type}][$cpu_type][user:${user_id}] ${screen_type} - применение твиков..."
+
+    apply_tweaks "${car_type}" "${cpu_type}" "${user_id}"
+  done
+
+  # FIXME: Выдать права
 
 }
 
@@ -876,62 +970,20 @@ function do_delete() {
   done
 }
 
-function clear_for_screen() {
-  local screen_type=$1
-  local user_id=$2
-  local non_system_apps
-  local keep_app_ids=()
-  local app_id
-
-  non_system_apps=$(run_adb shell pm list packages --user "${user_id}" -3 | cut -d':' -f2)
-
-  while IFS= read -r app_filename; do
-    log_verbose "[${screen_type}][clear_for_screen] All app: ${app_filename}"
-
-    local pkginfo_str
-    pkginfo_str=$(get_apk_package_info "${app_filename}")
-
-    local app_id
-    app_id=$(echo "${pkginfo_str}" | cut -f1)
-
-    keep_app_ids+=("${app_id}")
-
-  done < <(get_all_screen_apps "${screen_type}")
-
-  for app_id in ${non_system_apps}; do
-    if ! echo "${keep_app_ids[@]}" | grep -q "${app_id}"; then
-      log_warn "[${screen_type}][$app_id] Удаление..."
-
-      if ! run_adb uninstall --user "${user_id}" "${app_id}"; then
-        log_error "[${screen_type}][$app_id] Удаление: ошибка"
-        return 1
-      fi
-    else
-      log_info "[${screen_type}][$app_id] Удаление не требуется"
-    fi
-  done
-}
-
 function do_clear() {
+  local car_type
   local cpu_type
-
+  local users
+  car_type=$(adb_get_car_type)
   cpu_type=$(adb_get_cpu_type)
+  users=$(adb_get_users)
 
-  log_info "[${cpu_type}] Удаление сторонних приложений кроме CarModApps и пользовательских..."
+  for user_id in ${users}; do
+    log_info "[${car_type}][$cpu_type][user:${user_id}] Удаление всех приложений, кроме CarModApps"
 
-  case "${cpu_type}" in
-  "${CPU_TYPE_MAIN}")
-    clear_for_screen "${SCREEN_TYPE_DRIVER}" "${FRONT_MAIN_USER_ID}"
-    clear_for_screen "${SCREEN_TYPE_COPILOT}" "${FRONT_COPILOT_USER_ID}"
-    ;;
-  "${CPU_TYPE_REAR}")
-    clear_for_screen "${SCREEN_TYPE_REAR}" "${REAR_USER_ID}"
-    ;;
-  default)
-    log_error "[do_clear] Неизвестный тип CPU: ${cpu_type}"
-    exit 1
-    ;;
-  esac
+    # FIXME: NOT IMPLEMENTED
+    log_error "do_clear: NOT IMPLEMENTED"
+  done
 }
 
 # Check if network connection is available
