@@ -47,9 +47,6 @@ fi
 PACKAGES_DIR="${SCRIPT_DIR}/packages"
 PACKAGES_CMA_DIR="${PACKAGES_DIR}/carmodapps"
 PACKAGES_CMA_INDEX_FILE="${PACKAGES_CMA_DIR}/index.txt"
-PACKAGES_CUSTOM_SCREEN_TYPE_DRIVER_DIR="${PACKAGES_DIR}/custom/driver"
-PACKAGES_CUSTOM_SCREEN_TYPE_COPILOT_DIR="${PACKAGES_DIR}/custom/copilot"
-PACKAGES_CUSTOM_SCREEN_TYPE_REAR_DIR="${PACKAGES_DIR}/custom/rear"
 
 OPT_VERBOSE=false
 OPT_FORCE_INSTALL=false
@@ -131,12 +128,6 @@ if [ -f "${CONFIG_FILE}" ]; then
   # shellcheck disable=SC1090
   source "${CONFIG_FILE}"
 fi
-
-#################################################################
-# Variables which SHOULD NOT be overriden by user
-
-PACKAGES_CMA_DIR="${PACKAGES_DIR}/carmodapps"
-PACKAGES_CMA_INDEX_FILE="${PACKAGES_CMA_DIR}/index.txt"
 
 #################################################################
 # Logging
@@ -300,55 +291,10 @@ function get_carmodapps_apps() {
   done < <(cat "${PACKAGES_CMA_INDEX_FILE}")
 }
 
-# Get custom apps ids for screen type
-function get_custom_screen_apps() {
-  local screen_type=$1
-  local custom_packages_dir
-
-  custom_packages_dir=$(get_custom_packages_dir "${screen_type}")
-
-  log_verbose "[${screen_type}][get_custom_screen_apps] Проверка папки пользовательских приложений: ${custom_packages_dir}"
-
-  # Collect all custom apps
-  local custom_apps_count=0
-  local app_filename
-  while IFS= read -r -d '' app_filename; do
-    echo "${app_filename}"
-    log_verbose "[${screen_type}][get_custom_screen_apps] Найдено пользовательское приложение: ${app_filename}"
-    custom_apps_count=$((custom_apps_count + 1))
-  done < <(find "${custom_packages_dir}" -name "*.apk" -print0)
-
-  log_verbose "[${screen_type}][get_custom_screen_apps] Найдено пользовательских приложений: ${custom_apps_count}"
-}
-
 function get_all_screen_apps() {
   local screen_type=$1
 
   get_carmodapps_apps "${screen_type}"
-  get_custom_screen_apps "${screen_type}"
-}
-
-function get_custom_packages_dir() {
-  local screen_type=$1
-  local dir
-
-  case "${screen_type}" in
-  "${SCREEN_TYPE_DRIVER}")
-    dir="${PACKAGES_CUSTOM_SCREEN_TYPE_DRIVER_DIR}"
-    ;;
-  "${SCREEN_TYPE_COPILOT}")
-    dir="${PACKAGES_CUSTOM_SCREEN_TYPE_COPILOT_DIR}"
-    ;;
-  "${SCREEN_TYPE_REAR}")
-    dir="${PACKAGES_CUSTOM_SCREEN_TYPE_REAR_DIR}"
-    ;;
-  *)
-    log_error "Неизвестный тип экрана: ${screen_type}"
-    exit 1
-    ;;
-  esac
-
-  echo "${dir}"
 }
 
 #################################################################
@@ -808,36 +754,6 @@ function install_apk() {
   done
 }
 
-function install_custom_packages() {
-  local screen_type=$1
-  local user_id=$2
-
-  custom_packages_dir=$(get_custom_packages_dir "${screen_type}")
-
-  log_info "[${screen_type}] Проверка папки пользовательских приложений: ${custom_packages_dir}"
-
-  # Collect all custom apps
-  local custom_apps_count=0
-  local custom_apps=()
-  local app_filename
-  while IFS= read -r app_filename; do
-    custom_apps+=("${app_filename}")
-    custom_apps_count=$((custom_apps_count + 1))
-  done < <(get_custom_screen_apps "${screen_type}")
-
-  log_verbose "[${screen_type}] Найдено пользовательских приложений: ${custom_apps_count}"
-
-  for app_filename in "${custom_apps[@]}"; do
-    install_apk "${screen_type}" "${user_id}" "${app_filename}"
-  done
-
-  if [ ${custom_apps_count} -eq 0 ]; then
-    log_info "[${screen_type}] Нет пользовательских приложений"
-  else
-    log_info "[${screen_type}] Обработано пользовательских приложений: ${custom_apps_count}"
-  fi
-}
-
 function install_front() {
   local users=("${FRONT_MAIN_USER_ID}" "${FRONT_COPILOT_USER_ID}")
 
@@ -862,8 +778,6 @@ function install_front() {
       install_apk "${screen_type}" "${user_id}" "${app_filename}"
     done
 
-    # Install custom packages
-    install_custom_packages "${screen_type}" "${user_id}"
 
     # Run at the end, because swiftkey is installed, but may be not available
     tweak_ime "${screen_type}" "${user_id}"
@@ -891,9 +805,6 @@ function install_rear() {
   for app_filename in "${apps[@]}"; do
     install_apk "${screen_type}" "${user_id}" "${app_filename}"
   done
-
-  # Install custom packages
-  install_custom_packages "${screen_type}" "${user_id}"
 
   # Run at the end, because swiftkey is installed, but may be not available
   tweak_ime "${screen_type}" "${user_id}"
@@ -1306,12 +1217,6 @@ function usage() {
 
 Опции при запуске без команды:
   -d, Выполнить удаление ВСЕХ не системных приложений перед установкой
-
-Для добавления своих приложений положите apk в папки:
-
-   packages/custom/driver   Для экрана водителя
-   packages/custom/copilot  Для экрана пассажира
-   packages/custom/rear     Для заднего экрана
 
 Кастомизация настроек (для продвинутых пользователей):
 
