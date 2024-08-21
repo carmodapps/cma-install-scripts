@@ -59,8 +59,12 @@ UPDATE_CHANNEL="release"
 UPDATE_CHANNEL_EXTRA_HEADERS=()
 
 #################################################################
-# CPU/Screen types
+# CAR/CPU/Screen types
 
+CAR_TYPE_UNKNOWN="Неизвестный автомобиль"
+CAR_TYPE_LIAUTO="LiAuto"
+
+CPU_TYPE_MAIN="Основной CPU"
 CPU_TYPE_FRONT="Передний CPU"
 CPU_TYPE_REAR="Задний CPU"
 
@@ -215,25 +219,6 @@ function run_aapt() {
 #################################################################
 # CPU/Screen types helpers
 
-function get_cpu_type() {
-  local product_type=$1
-
-  case "${product_type}" in
-  HU_SS2MAXF)
-    echo "${CPU_TYPE_FRONT}"
-    ;;
-  HU_SS2MAXR)
-    echo "${CPU_TYPE_REAR}"
-    ;;
-  HU_SS2PRO)
-    echo "${CPU_TYPE_FRONT}"
-    ;;
-  *)
-    log_error "Неизвестный тип CPU: ${product_type}"
-    return 1
-    ;;
-  esac
-}
 
 function get_screen_type() {
   local cpu_type=$1
@@ -374,11 +359,57 @@ function adb_get_product_type() {
   echo "${product_type}"
 }
 
-function adb_get_cpu_type() {
+function adb_get_cpu_type_liauto() {
   local product_type
   product_type=$(adb_get_product_type)
 
-  get_cpu_type "${product_type}"
+  case "${product_type}" in
+  HU_SS2MAXF)
+    echo "${CPU_TYPE_FRONT}"
+    ;;
+  HU_SS2MAXR)
+    echo "${CPU_TYPE_REAR}"
+    ;;
+  HU_SS2PRO)
+    echo "${CPU_TYPE_FRONT}"
+    ;;
+  HU_SS3)
+    echo "${CPU_TYPE_MAIN}"
+    ;;
+  *)
+    log_error "Неизвестный тип CPU: ${product_type}"
+    return 1
+    ;;
+  esac
+}
+
+function adb_get_cpu_type() {
+  local car_type
+  car_type=$(adb_get_car_type)
+
+  case "${car_type}" in
+  "${CAR_TYPE_LIAUTO}")
+    adb_get_cpu_type_liauto
+    ;;
+  *)
+    log_error "Неизвестный тип автомобиля: ${car_type}"
+    echo "${CPU_TYPE_MAIN}"
+    ;;
+  esac
+}
+
+function adb_get_car_type() {
+  local ro_product_manufacturer
+  ro_product_manufacturer=$(run_adb shell getprop ro.product.manufacturer)
+
+  case "${ro_product_manufacturer}" in
+  "LI_AUTO")
+    echo "${CAR_TYPE_LIAUTO}"
+    ;;
+  *)
+    echo "${CAR_TYPE_UNKNOWN}"
+    ;;
+  esac
 }
 
 function adb_get_vin() {
@@ -410,6 +441,31 @@ function adb_get_connected_devices() {
     done
 
   fi
+}
+
+#Get all available users IDs
+function adb_get_users(){
+  # SS2-front
+  # Users:
+  #	  UserInfo{0:Driver:c13} running
+  #	  UserInfo{21473:Copilot:1030} running
+  #
+  # SS2-rear
+  # Users:
+  #  UserInfo{0:Driver:c13} running
+  #
+  # SS3
+  # Users:
+  # 	UserInfo{0:Driver:c13} running
+  #	  UserInfo{6174:Rear:1030} running
+  #	  UserInfo{21473:Copilot:1030} running
+  #
+  # Zeekr: TODO
+  local users_output
+  users_output=$(run_adb shell pm list users)
+
+  # parse lines like "UserInfo{0:Driver:c13} running"
+  echo "${users_output}" | awk -F'[{}:]' '/UserInfo/ {print $2}'
 }
 
 #################################################################
@@ -870,48 +926,39 @@ function do_install() {
 
 }
 
-function delete_for_user() {
-  local screen_type=$1
-  local user_id=$2
-  local non_system_apps
-
-  non_system_apps=$(run_adb shell pm list packages --user "${user_id}" -3 | cut -d':' -f2)
-
-  if [ -z "$non_system_apps" ]; then
-    log_info "[${screen_type}] Нет приложений для удаления"
-    return 0
-  fi
-
-  log_info "[${screen_type}] Удаление всех приложений, кроме системных..."
-
-  for app_id in ${non_system_apps}; do
-    log_info "[${screen_type}] Удаление ${app_id}..."
-
-    if ! run_adb uninstall --user "${user_id}" "${app_id}"; then
-      log_error "[${screen_type}] Удаление ${app_id}: ошибка"
-      return 1
-    fi
-  done
-}
-
 function do_delete() {
+  local car_type
   local cpu_type
-
+  local users
+  car_type=$(adb_get_car_type)
   cpu_type=$(adb_get_cpu_type)
+  users=$(adb_get_users)
 
-  case "${cpu_type}" in
-  "${CPU_TYPE_FRONT}")
-    delete_for_user "${SCREEN_TYPE_DRIVER}" "${FRONT_MAIN_USER_ID}"
-    delete_for_user "${SCREEN_TYPE_COPILOT}" "${FRONT_COPILOT_USER_ID}"
-    ;;
-  "${CPU_TYPE_REAR}")
-    delete_for_user "${SCREEN_TYPE_REAR}" "${REAR_USER_ID}"
-    ;;
-  default)
-    log_error "Неизвестный тип CPU: ${cpu_type}"
-    exit 1
-    ;;
-  esac
+  log_info "Удаление всех приложений, кроме системных..."
+
+  for user_id in ${users}; do
+    log_info "[${car_type}][$cpu_type][user:${user_id}] Удаление всех приложений, кроме системных..."
+
+    local non_system_apps
+
+    non_system_apps=$(run_adb shell pm list packages --user "${user_id}" -3 | cut -d':' -f2)
+
+    if [ -z "$non_system_apps" ]; then
+      log_info "[${car_type}][$cpu_type][user:${user_id}] Нет приложений для удаления"
+    else
+
+      log_info "[${car_type}][$cpu_type][user:${user_id}] Удаление всех приложений, кроме системных..."
+
+      for app_id in ${non_system_apps}; do
+        log_info "[${car_type}][$cpu_type][user:${user_id}] Удаление ${app_id}..."
+
+        if ! run_adb uninstall --user "${user_id}" "${app_id}"; then
+          log_error "[${car_type}][$cpu_type][user:${user_id}] Удаление ${app_id}: ошибка"
+        fi
+      done
+    fi
+
+  done
 }
 
 function clear_for_screen() {
@@ -1150,17 +1197,22 @@ function wait_for_devices() {
       local serial
       for serial in ${devices_serials}; do
         local cpu_type
+        local car_type
 
         ADB_CURRENT_SERIAL="${serial}"
 
         cpu_type=$(adb_get_cpu_type)
-        log_info "Найдено устройство: ${cpu_type} (${serial})"
+        car_type=$(adb_get_car_type)
+        log_info "Найдено устройство: ${car_type} ${cpu_type} (${serial})"
       done
       log_info "============================================================"
+
+      ADB_CURRENT_SERIAL=""
 
       break
     fi
   done
+
 }
 
 function exec_on_all_devices() {
@@ -1176,17 +1228,19 @@ function exec_on_all_devices() {
 
   local serial
   for serial in ${devices_serials}; do
+    ADB_CURRENT_SERIAL="${serial}"
+
     local cpu_type
     cpu_type=$(adb_get_cpu_type)
 
     log_verbose "${cmd} ${serial} ${cpu_type}"
 
-    ADB_CURRENT_SERIAL="${serial}"
     if ! "${cmd}" "${cpu_type}" "$@"; then
       log_error "${cmd} ${serial} ${cpu_type}"
       return 1
     fi
   done
+  ADB_CURRENT_SERIAL=""
 }
 
 #################################################################
