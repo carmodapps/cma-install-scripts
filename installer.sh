@@ -70,7 +70,6 @@ ALL_CAR_TYPES_TAGS=(
 )
 
 CPU_TYPE_MAIN="Основной CPU"
-CPU_TYPE_FRONT="Передний CPU"
 CPU_TYPE_REAR="Задний CPU"
 
 SCREEN_TYPE_DRIVER="Экран водителя"
@@ -223,7 +222,7 @@ function get_screen_type() {
   local cpu_type=$1
   local user_id=$2
 
-  if [ "${cpu_type}" == "${CPU_TYPE_FRONT}" ]; then
+  if [ "${cpu_type}" == "${CPU_TYPE_MAIN}" ]; then
     if [ "${user_id}" == "${FRONT_MAIN_USER_ID}" ]; then
       echo "${SCREEN_TYPE_DRIVER}"
     elif [ "${user_id}" == "${FRONT_COPILOT_USER_ID}" ]; then
@@ -319,13 +318,13 @@ function adb_get_cpu_type_liauto() {
 
   case "${product_type}" in
   HU_SS2MAXF)
-    echo "${CPU_TYPE_FRONT}"
+    echo "${CPU_TYPE_MAIN}"
     ;;
   HU_SS2MAXR)
     echo "${CPU_TYPE_REAR}"
     ;;
   HU_SS2PRO)
-    echo "${CPU_TYPE_FRONT}"
+    echo "${CPU_TYPE_MAIN}"
     ;;
   HU_SS3)
     echo "${CPU_TYPE_MAIN}"
@@ -830,7 +829,7 @@ function do_install() {
   cpu_type=$(adb_get_cpu_type)
 
   case "${cpu_type}" in
-  "${CPU_TYPE_FRONT}")
+  "${CPU_TYPE_MAIN}")
     tweak_set_timezone
     tweak_set_night_mode
     install_front
@@ -927,7 +926,7 @@ function do_clear() {
   log_info "[${cpu_type}] Удаление сторонних приложений кроме CarModApps и пользовательских..."
 
   case "${cpu_type}" in
-  "${CPU_TYPE_FRONT}")
+  "${CPU_TYPE_MAIN}")
     clear_for_screen "${SCREEN_TYPE_DRIVER}" "${FRONT_MAIN_USER_ID}"
     clear_for_screen "${SCREEN_TYPE_COPILOT}" "${FRONT_COPILOT_USER_ID}"
     ;;
