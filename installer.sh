@@ -298,23 +298,10 @@ function get_all_screen_apps() {
 
 #################################################################
 # ADB helpers
-function adb_get_product_type() {
-  local product_type
-  product_type=$(run_adb shell getprop ro.build.product)
-
-  if [ -z "${product_type}" ]; then
-    log_error "Не удалось считать ro.build.product"
-    return 1
-  fi
-
-  log_verbose "ro.build.product: ${product_type}"
-
-  echo "${product_type}"
-}
 
 function adb_get_cpu_type_liauto() {
   local product_type
-  product_type=$(adb_get_product_type)
+  product_type=$(run_adb shell getprop ro.product.model)
 
   case "${product_type}" in
   HU_SS2MAXF)
@@ -824,9 +811,16 @@ function do_display_vin() {
 }
 
 function do_install() {
+  local car_type
   local cpu_type
+  local log_prefix
 
+  car_type=$(adb_get_car_type)
   cpu_type=$(adb_get_cpu_type)
+  log_prefix="[${car_type}][${cpu_type}]"
+
+  log_info "${log_prefix} Установка приложений..."
+  return
 
   case "${cpu_type}" in
   "${CPU_TYPE_MAIN}")
@@ -1143,12 +1137,15 @@ function wait_for_devices() {
       for serial in ${devices_serials}; do
         local cpu_type
         local car_type
+        local product_type
 
         ADB_CURRENT_SERIAL="${serial}"
 
         cpu_type=$(adb_get_cpu_type)
         car_type=$(adb_get_car_type)
-        log_info "Найдено устройство: ${car_type} ${cpu_type} (${serial})"
+        product_type=$(run_adb shell getprop ro.product.model)
+
+        log_info "Найдено устройство: ${car_type} (${product_type}) ${cpu_type} (${serial})"
       done
       log_info "============================================================"
 
