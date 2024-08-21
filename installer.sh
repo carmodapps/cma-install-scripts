@@ -698,8 +698,8 @@ function get_badging_user_field_value() {
   local value
   value=$(run_adb shell dumpsys package "${app_id}" |
    awk -v app="$app_id" -v user="$user_id" -v field="$field" '
-    $0 ~ "Package \\[" app "\\]" {pkg=1}
-    pkg && $0 ~ "User " user ":" {user_found=1}
+    $0 ~ "Package \\[" app "\\]" {package_found=1}
+    package_found && $0 ~ "User " user ":" {user_found=1}
     user_found && $0 ~ field "=" {
         split($0, fields, " ")
         for (i in fields) {
@@ -721,23 +721,48 @@ function get_badging_user_field_value() {
   echo "${value}"
 }
 
-# Return permissions, separated by \n
-function get_apk_permissions() {
-  local file_name=$1
-  local aapt_output
+function get_app_requested_permissions() {
+  local app_id=$1
 
-  aapt_output=$(
-    run_aapt dump badging "${file_name}" | awk -F"'" '/uses-permission: name=/ { print $2 }'
-  )
+  run_adb shell dumpsys package "$app_id" |
+    awk -v app_id="$app_id"  '
+      $0 ~ "Package \\[" app_id "\\]" {
+        package_found = 1
+      }
+      package_found && /requested permissions:/ {in_section=1; next}
+      package_found && /install permissions:/ {in_section=0} # FIXME: better exit
+      in_section && /^[ ]+/ {
+          gsub(/^[ \t]+|[ \t]+$/, "", $0)
+          print $0
+      }
+    '
+}
 
-  log_verbose "[$(basename "${file_name}")] aapt_output:\n${aapt_output}"
+function get_app_user_runtime_permissions() {
+  local app_id=$1
+  local user_id=$2
 
-  if [ -z "${aapt_output}" ]; then
-    log_verbose "[$(basename "${file_name}")] Приложение не имеет разрешений"
-    return 0
-  fi
+  run_adb shell dumpsys package "$app_id" |
+    awk -v app_id="$app_id" -v user="$user_id" '
+      $0 ~ "Package \\[" app_id "\\]" {
+        package_found = 1
+      }
+      package_found && $0 ~ "User " user ":" {user_found=1}
+      user_found && /runtime permissions:/ {in_section=1; next}
+      in_section && $0 !~ /.permission./ {in_section=0; user_found=0}
+      in_section {
+        gsub(/^[ \t]+|[ \t]+$/, "", $0) # remove spaces
 
-  echo "${aapt_output}"
+        split($0, parts, ": ")
+        permission = parts[1]
+
+        match(parts[2], /granted=[^,]+/)
+        granted = substr(parts[2], RSTART+8, RLENGTH-8)
+
+
+        print permission ":" granted
+      }
+    '
 }
 
 #
@@ -845,24 +870,48 @@ function install_apk() {
     log_error "${log_prefix} Установка ${app_id}: ошибка"
     return 1
   fi
+}
 
-  # Check APPOPS_xxx
-  local appops=() # Required appops for this app
-  local opt
-  for opt in "${PERMISSIONS_APPOPS[@]}"; do
-    if get_apk_permissions "${app_filename}" | grep -q "${opt}"; then
-      appops+=("${opt}")
+function fix_apk_permissions() {
+  local car_type=$1
+  local cpu_type=$2
+  local user_id=$3
+  local app_id=$4
+  local screen_type=$(get_screen_type "${car_type}" "${cpu_type}" "${user_id}")
+  #local log_prefix="[${car_type}][$cpu_type][user:${user_id}] ${screen_type} -"
+  local log_prefix="[${car_type}][$cpu_type] ${screen_type} -"
+
+#   FIXME: Not finished
+#  local requested_permissions=$(get_app_requested_permissions "${app_id}")
+#  local permission
+#  for permission in ${requested_permissions}; do
+#    log_info "${log_prefix} Выдача разрешения ${app_id} ${permission}..."
+#
+#    if ! run_adb shell pm grant --user "${user_id}" "${app_id}" "${permission}"; then
+#      log_error "${log_prefix} Выдача разрешения ${app_id} ${permission}: ошибка"
+#      return 1
+#    fi
+#  done
+
+  local runtime_permissions=$(get_app_user_runtime_permissions "${app_id}" "${user_id}")
+  local perm_value
+  for perm_value in ${runtime_permissions}; do
+    local permission=$(echo "${perm_value}" | cut -d':' -f1)
+    local granted=$(echo "${perm_value}" | cut -d':' -f2) # true/false
+
+    if [ "${granted}" == "true" ]; then
+      log_verbose "${log_prefix} Разрешение ${permission} уже выдано"
+      continue
     fi
-  done
 
-  for opt in "${appops[@]}"; do
-    log_info "${log_prefix} Выдача разрешения ${app_id} ${opt}..."
+    log_info "${log_prefix} Выдача разрешения ${app_id} ${permission}..."
 
-    if ! run_adb shell appops set --user "${user_id}" "${app_id}" "${opt}" allow; then
-      log_error "${log_prefix} Выдача разрешения ${app_id} ${opt}: ошибка"
+    if ! run_adb shell pm grant --user "${user_id}" "${app_id}" "${permission}"; then
+      log_error "${log_prefix} Выдача разрешения ${app_id} ${permission}: ошибка"
       return 1
     fi
   done
+
 }
 
 function uninstall_app_id() {
@@ -995,7 +1044,7 @@ function do_install() {
     app_filename="${car_packages_cma_dir}/${app_filename_basename}"
 
     ############################
-    # Disable if not enabled for screen
+    # Install/Uinstall
     for user_id in ${users}; do
       local screen_type=$(get_screen_type "${car_type}" "${cpu_type}" "${user_id}")
       local screen_type_tag=$(get_screen_type_tag "${screen_type}")
@@ -1016,6 +1065,8 @@ function do_install() {
       elif [ "${should_be_installed}" == "true" ]; then
         install_apk "${car_type}" "${cpu_type}" "${user_id}" "${app_filename}"
       fi
+
+      fix_apk_permissions "${car_type}" "${cpu_type}" "${user_id}" "${app_id}"
     done
 
   done
