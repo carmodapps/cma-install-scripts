@@ -64,6 +64,14 @@ UPDATE_CHANNEL_EXTRA_HEADERS=()
 CAR_TYPE_UNKNOWN="Неизвестный автомобиль"
 CAR_TYPE_LIAUTO="LiAuto"
 
+CAR_TYPE_LIAUTO_TAG="LI"
+CAR_TYPE_LIAUTO_ZEEKR_TAG="ZEEKR"
+
+ALL_CAR_TYPES_TAGS=(
+  "${CAR_TYPE_LIAUTO_TAG}"
+  "${CAR_TYPE_LIAUTO_ZEEKR_TAG}"
+)
+
 CPU_TYPE_MAIN="Основной CPU"
 CPU_TYPE_FRONT="Передний CPU"
 CPU_TYPE_REAR="Задний CPU"
@@ -1067,20 +1075,23 @@ function do_check_self_updates() {
   #  а также добавить update.sh (может качать с github и запускать?)
 }
 
-function do_update() {
-  local api_url="https://store.carmodapps.com/api/applications/download"
+function do_update_for_car_tag() {
+  local car_tag=$1
+  local api_url="https://store.carmodapps.com/api/applications/download?carModel=${car_tag}"
 
   local headers=(
     "Accept: text/plain"
   )
+  local car_packages_cma_dir="${PACKAGES_CMA_DIR}/${car_tag}"
+  local log_prefix="[${car_tag}][$UPDATE_CHANNEL]"
 
-  mkdir -p "${PACKAGES_CMA_DIR}"
+  mkdir -p "${car_packages_cma_dir}"
 
-  log_info "Проверка обновлений приложений ($UPDATE_CHANNEL)..."
+  log_info "Проверка обновлений приложений, автомобиль: $car_tag, канал: $UPDATE_CHANNEL..."
 
   # if UPDATE_CHANNEL!=release
   if [ "${UPDATE_CHANNEL}" != "release" ]; then
-    api_url="${api_url}?updateChannel=${UPDATE_CHANNEL}"
+    api_url="${api_url}&updateChannel=${UPDATE_CHANNEL}"
   fi
 
   # Array to store curl command parameters
@@ -1094,7 +1105,7 @@ function do_update() {
 
   local tmp_index_file
   tmp_index_file=$(mktemp)
-  log_verbose "tmp_index_file: ${tmp_index_file}"
+  log_verbose "${log_prefix} tmp_index_file: ${tmp_index_file}"
 
   curl_params+=(
     -o "${tmp_index_file}"
@@ -1107,7 +1118,7 @@ function do_update() {
   http_status_code=$(run_cmd curl "${curl_params[@]}")
 
   if [ "${http_status_code}" != "200" ]; then
-    log_error "Ошибка получения списка приложений: (HTTP ${http_status_code}): $(cat "${tmp_index_file}")"
+    log_error "${log_prefix} Ошибка получения списка приложений: (HTTP ${http_status_code}): $(cat "${tmp_index_file}")"
     return 1
   fi
 
@@ -1138,16 +1149,16 @@ function do_update() {
     app_screens=$(echo "$app_line" | cut -d'|' -f4)
     app_upd_channel=$(echo "$app_line" | cut -d'|' -f5)
 
-    app_local_filename="${PACKAGES_CMA_DIR}/${app_filename}"
+    app_local_filename="${car_packages_cma_dir}/${app_filename}"
     app_local_filename_basename=$(basename "${app_local_filename}")
 
     if [ -f "${app_local_filename}" ]; then
-      log_info "[${app_id}]  ($app_upd_channel) Уже загружен, пропускаем..."
+      log_info "${log_prefix}[${app_id}]  ($app_upd_channel) Уже загружен, пропускаем..."
     else
-      log_info "[${app_id}]  ($app_upd_channel) Загрузка..."
+      log_info "${log_prefix}[${app_id}]  ($app_upd_channel) Загрузка..."
 
       if ! curl -s -o "${app_local_filename}" "${app_url}"; then
-        log_error "[${app_id}]  ($app_upd_channel) Загрузка: ошибка"
+        log_error "${log_prefix}[${app_id}]  ($app_upd_channel) Загрузка: ошибка"
         # Exit from script, we already cleaned index file
         exit 1
       fi
@@ -1165,12 +1176,20 @@ function do_update() {
         # This is current app file, skip
         continue
       fi
-      log_warn "[${app_id}] Удаление старого файла ${old_app_file_basename}..."
+      log_warn "${log_prefix}[${app_id}] Удаление старого файла ${old_app_file_basename}..."
       rm -f "${old_app_file}"
     done < <(find_app_files "$app_id")
   done
 
 }
+function do_update() {
+  # foreach ALL_CAR_TYPES_TAGS
+  local car_tag
+  for car_tag in "${ALL_CAR_TYPES_TAGS[@]}"; do
+    do_update_for_car_tag "${car_tag}"
+  done
+}
+
 
 # Wait for device and return line for each device:
 # <serial>\t<cpu_type>
