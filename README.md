@@ -1,4 +1,4 @@
-# Скрипт для установки приложений CarModApps для автомобилей Lixiang
+# Скрипт для установки приложений CarModApps
 
 - Сайт: https://carmodapps.com
 - Группа в Telegram: https://t.me/carmodapps
