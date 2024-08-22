@@ -10,7 +10,7 @@
 ## Установка
 
 - Скачайте и распакуйте архив с репозиторием:
-[liauto-install-scripts-master.zip](https://github.com/carmodapps/liauto-install-scripts/archive/master.zip)
+[cma-install-scripts-master.zip](https://github.com/carmodapps/cma-install-scripts/archive/master.zip)
 
 ## Быстрый старт
 
