@@ -67,7 +67,7 @@ ALL_CAR_TYPES_TAGS=(
 )
 
 CPU_TYPE_MAIN="Основной CPU"
-CPU_TYPE_REAR="Задний CPU"
+CPU_TYPE_SECONDARY="Вторичный CPU"
 
 SCREEN_TYPE_DRIVER="Экран водителя"
 SCREEN_TYPE_COPILOT="Экран пассажира"
@@ -254,7 +254,7 @@ function get_screen_type_liauto_ss2() {
     fi
     ;;
 
-  "${CPU_TYPE_REAR}")
+  "${CPU_TYPE_SECONDARY}")
     echo "${SCREEN_TYPE_REAR}"
     ;;
   esac
@@ -361,7 +361,7 @@ function adb_get_cpu_type_liauto() {
     echo "${CPU_TYPE_MAIN}"
     ;;
   HU_SS2MAXR)
-    echo "${CPU_TYPE_REAR}"
+    echo "${CPU_TYPE_SECONDARY}"
     ;;
   HU_SS2PRO)
     echo "${CPU_TYPE_MAIN}"
