@@ -1169,6 +1169,18 @@ function do_install() {
   done
 }
 
+function do_install_apk() {
+  local apk_path=$1
+  local car_type=$(adb_get_car_type)
+  local cpu_type=$(adb_get_cpu_type)
+  local users=$(adb_get_users)
+
+  for user_id in ${users}; do
+    log_info "Установка ${apk_path} для пользователя ${user_id}..."
+    install_apk "${car_type}" "${cpu_type}" "${user_id}" "${apk_path}"
+  done
+}
+
 function do_delete() {
   local car_type
   local cpu_type
@@ -1442,13 +1454,8 @@ function exec_on_all_devices() {
   for serial in ${devices_serials}; do
     ADB_CURRENT_SERIAL="${serial}"
 
-    local cpu_type
-    cpu_type=$(adb_get_cpu_type)
-
-    log_verbose "${cmd} ${serial} ${cpu_type}"
-
-    if ! "${cmd}" "${cpu_type}" "$@"; then
-      log_error "${cmd} ${serial} ${cpu_type}"
+    if ! "${cmd}" "$@"; then
+      log_error "Ошибка: ${cmd}"
       return 1
     fi
   done
@@ -1465,7 +1472,12 @@ function usage() {
 Сайт: https://carmodapps.com, Telegram: https://t.me/carmodapps
 ----------------------------------------------------------------------------
 
-Использование: $(basename "${0}") [options] [<команда>]
+Использование:
+
+  $(basename "${0}") [options] [<команда>]
+
+Установить сторонний APK-файл (и выдать разрешения):
+  $(basename "${0}") [options] <APK-файл>
 
 По-умолчанию выполняется update + install
 
@@ -1504,6 +1516,7 @@ function main() {
     log_warn "============================================================"
   fi
 
+  local apk_path
   while [[ $# -gt 0 ]]; do
     case "$1" in
     -h | --help)
@@ -1521,6 +1534,10 @@ function main() {
       ;;
     vin | install | update | delete)
       cmd="$1"
+      ;;
+    *apk)
+      cmd="apk"
+      apk_path="$1"
       ;;
     *)
       log_error "Неизвестная опция: $1"
@@ -1552,6 +1569,15 @@ function main() {
     wait_for_devices
     exec_on_all_devices do_delete
     ;;
+  apk)
+    if [ -z "${apk_path}" ]; then
+      log_error "Не указан путь к APK-файлу"
+      exit 1
+    fi
+    wait_for_devices
+    exec_on_all_devices do_install_apk "${apk_path}"
+    ;;
+
   *)
     if has_network_connection; then
       do_check_self_updates
