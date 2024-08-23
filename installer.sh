@@ -1175,9 +1175,18 @@ function do_install_apk() {
   local cpu_type=$(adb_get_cpu_type)
   local users=$(adb_get_users)
 
+  local pkginfo_str=$(get_apk_package_info "${apk_path}")
+
+  local app_id=$(echo "${pkginfo_str}" | cut -f1)
+  local app_version_code=$(echo "${pkginfo_str}" | cut -f2)
+  local app_version_name=$(echo "${pkginfo_str}" | cut -f3)
+
+
   for user_id in ${users}; do
     log_info "Установка ${apk_path} для пользователя ${user_id}..."
     install_apk "${car_type}" "${cpu_type}" "${user_id}" "${apk_path}"
+
+    fix_apk_permissions "${car_type}" "${cpu_type}" "${user_id}" "${app_id}"
   done
 }
 
