@@ -519,6 +519,18 @@ function tweak_liauto_disable_psglauncher() {
   # adb shell pm enable com.lixiang.psglauncher
 }
 
+function tweak_liauto_disable_newlauncher() {
+  local car_type=$1
+  local cpu_type=$2
+  local user_id=$3
+
+  log_info "[${car_type}][$cpu_type][user:${user_id}] Отключение NEWLauncher"
+
+  # Юзера 21473 указывать не надо...
+  run_adb shell pm disable-user com.lixiang.newlauncher
+  run_adb shell pm clear com.lixiang.newlauncher
+}
+
 function tweak_ime() {
   local car_type=$1
   local cpu_type=$2
@@ -556,9 +568,8 @@ function tweak_change_locale() {
 function get_tweaks_liauto() {
   local cpu_type=$1
   local user_id=$2
-  local screen_type
-
-  screen_type=$(get_screen_type "${CAR_TYPE_LIAUTO}" "${cpu_type}" "${user_id}")
+  local screen_type=$(get_screen_type "${CAR_TYPE_LIAUTO}" "${cpu_type}" "${user_id}")
+  local platform=$(run_adb shell getprop ro.boot.board.platform)
 
   case "${screen_type}" in
   "${SCREEN_TYPE_DRIVER}")
@@ -572,6 +583,9 @@ function get_tweaks_liauto() {
   "${SCREEN_TYPE_REAR}")
     echo "tweak_set_timezone"
     echo "tweak_liauto_disable_psglauncher"
+    if [ "${platform}" = "SS3" ]; then
+      echo "tweak_liauto_disable_newlauncher"
+    fi
     ;;
   esac
 
