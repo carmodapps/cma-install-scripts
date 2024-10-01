@@ -292,7 +292,7 @@ function get_screen_type_liauto() {
   "SS2MAX"|"SS2PRO")
     get_screen_type_liauto_ss2 "${cpu_type}" "${user_id}"
     ;;
-  "SS3")
+  "SS3"|"SS3PRO")
     get_screen_type_liauto_ss3 "${cpu_type}" "${user_id}"
     ;;
   *)
